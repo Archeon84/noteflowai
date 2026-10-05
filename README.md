@@ -11,6 +11,19 @@
 
 ---
 
+## 📌 Project Status & Supported Environments
+
+| Dimension | Specification | Notes |
+| :--- | :--- | :--- |
+| **Build Status** | ✅ **Passing** | Verified via `./gradlew testDebugUnitTest` and `:app:assembleDebug` |
+| **App Maturity** | 🟢 **Production-Ready** | Feature-complete 2-stage RAG, on-device LiteRT inference & memory graph |
+| **Supported OS** | **Android 8.0 to Android 15** (API 26–35) | Recommended: Android 11+ (API 30+) for best NPU/GPU compute support |
+| **Hardware Targets** | **ARM64 (`arm64-v8a`)** & **x86_64** | Physical ARM64 device recommended for OpenCL GPU acceleration |
+| **Memory Guidelines** | **6 GB+ RAM** recommended | Devices with < 6 GB RAM should select Gemma 4 E2B (~1.2 GB) model in Settings |
+| **Model Distribution** | **Zero Bundled Weights** (~45 MB APK) | Models downloaded on-demand in-app to internal app storage |
+
+---
+
 NoteFlow AI is an offline-first **second brain** for Android. It replaces cloud-dependent note apps with high-velocity, sub-second local intelligence. By combining Google LiteRT-LM on-device inference, an Alibaba GTE neural cross-encoder, IBM Granite multilingual embeddings, and native C++ `whisper.cpp` speech recognition, NoteFlow AI turns your personal notes into an autonomous, interconnected knowledge network without cloud subscription fees or data leaks.
 
 ---
@@ -86,7 +99,7 @@ flowchart LR
 
 ## ⏱️ Quick Start (< 10 Minutes)
 
-### Prerequisites
+### Prerequisites (Verified Against Repo Configuration)
 - **Android Studio**: Hedgehog (2023.1.1) or newer
 - **JDK**: 17
 - **NDK**: `27.0.12077973`
@@ -132,6 +145,7 @@ NoteFlow AI is built with an absolute **zero-telemetry commitment**:
 - **No Third-Party Analytics**: No Firebase Crashlytics, no Google Analytics, no telemetry beacons.
 - **Encrypted at Rest**: All note content and memory structures are encrypted with **SQLCipher** (AES-256).
 - **Offline By Default**: Complete functionality is preserved in Airplane Mode.
+- **Responsible Vulnerability Disclosure**: Please report any security vulnerability privately through [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new).
 
 For contribution guidelines and security protocols, refer to **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
@@ -139,4 +153,4 @@ For contribution guidelines and security protocols, refer to **[CONTRIBUTING.md]
 
 ## 📄 License
 
-Distributed under the Apache License 2.0. See `LICENSE` for details.
+Distributed under the Apache License 2.0. See [LICENSE](LICENSE) for details.

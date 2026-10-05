@@ -282,8 +282,8 @@ To ensure accountability and structured collaboration, operational responsibilit
 | **Security & Privacy Compliance** | Security Officer | Core Architect | Zero-telemetry validation, SQLCipher encryption, secret sanitization |
 
 ### Communication Channels:
-- **Bug Reports & Issues**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
-- **Security Vulnerabilities**: File a private advisory or reach maintainers at `dev@noteflowai.com` (do not file public issues for security vulnerabilities).
+- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
+- **Security Vulnerabilities**: File a private advisory directly via [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new) (please do not disclose security issues in public tickets).
 
 ---
 

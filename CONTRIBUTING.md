@@ -19,6 +19,9 @@ NoteFlow AI is **Zero-Telemetry by Design**:
 - **Encrypted Storage**:
   - The SQLite database is encrypted at rest using **SQLCipher**.
   - Any persisted credentials or API tokens in `SharedPreferences` must use AndroidX `EncryptedSharedPreferences`.
+- **Vulnerability Reporting**:
+  - Report potential vulnerabilities privately through [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new).
+  - Do not create public GitHub issues for security vulnerabilities.
 
 ---
 
