@@ -6,16 +6,19 @@ Welcome to **NoteFlow AI** — a 100% private, on-device note-taking system equi
 
 ## 📋 Table of Contents
 1. [Executive Overview](#-executive-overview)
-2. [Visual Architecture & Subsystem Diagrams](#-visual-architecture--subsystem-diagrams)
-3. [Architecture Decision Highlights (ADRs)](#-architecture-decision-highlights-adrs)
-4. [Key Architecture & Core Subsystems](#-key-architecture--core-subsystems)
-5. [Known Limitations & Debugging Guide](#-known-limitations--debugging-guide)
-6. [Performance Baselines](#-performance-baselines)
-7. [Dependency Snapshot](#-dependency-snapshot)
-8. [On-Device & Cloud AI Models Catalog](#-on-device--cloud-ai-models-catalog)
-9. [Developer Setup & Quick Verification](#-developer-setup--quick-verification)
-10. [Contributing & Security Policy](#-contributing--security-policy)
-11. [Roadmap & Next Steps](#-roadmap--next-steps)
+2. [What a First-Time Developer Should Expect](#-what-a-first-time-developer-should-expect)
+3. [Visual Architecture & Subsystem Diagrams](#-visual-architecture--subsystem-diagrams)
+4. [Architecture Decision Highlights (ADRs)](#-architecture-decision-highlights-adrs)
+5. [Key Architecture & Core Subsystems](#-key-architecture--core-subsystems)
+6. [Known Bad States & Incident Recovery Playbook](#-known-bad-states--incident-recovery-playbook)
+7. [Operational Ownership & Support Model](#-operational-ownership--support-model)
+8. [Release Checklist & QA Gate](#-release-checklist--qa-gate)
+9. [Performance Baselines](#-performance-baselines)
+10. [Dependency & Toolchain Snapshot](#-dependency--toolchain-snapshot)
+11. [On-Device & Cloud AI Models Catalog](#-on-device--cloud-ai-models-catalog)
+12. [Developer Setup & Quick Verification](#-developer-setup--quick-verification)
+13. [Contributing & Security Policy](#-contributing--security-policy)
+14. [Roadmap & Next Steps](#-roadmap--next-steps)
 
 ---
 
@@ -23,11 +26,40 @@ Welcome to **NoteFlow AI** — a 100% private, on-device note-taking system equi
 
 NoteFlow AI is built to give users an **autonomous, private second brain** operating completely offline on Android hardware. Unlike cloud-dependent note applications, NoteFlow AI processes raw text, voice recordings, documents, and knowledge queries locally without telemetry or subscription paywalls.
 
-### Key Capabilities:
+### Key Superpowers:
 - **Omni-Capture Speed Dial**: Record voice notes processed locally via `whisper.cpp`, capture documents via camera OCR, or import PDF and YouTube transcripts.
 - **Autonomous Knowledge Graph & Personal Memory**: Automatically extracts entities, commitments, temporal events, and decision conflicts from user notes.
 - **2-Stage Hybrid RAG**: Merges FTS5 full-text keyword retrieval with ONNX semantic vector embeddings, refined by an Alibaba GTE neural cross-encoder for zero-hallucination note grounded chat with exact citations (`[1]`, `[2]`).
 - **Google LiteRT-LM Inference**: Direct execution of `Gemma 4 E2B/E4B` models on OpenCL GPU / XNNPACK CPU with zero cloud latency.
+
+---
+
+## 🧭 What a First-Time Developer Should Expect
+
+When checking out and building NoteFlow AI for the first time, here are the exact timings, behaviors, and expected milestones:
+
+### 1. Build Timings
+- **First Clean Build (`./gradlew assembleDebug`)**: ~2.5 to 4.5 minutes. Gradle downloads dependencies and CMake compiles native C++ code (`whisper.cpp`).
+- **Incremental Builds**: ~15 to 30 seconds.
+- **Unit Test Execution (`./gradlew testDebugUnitTest`)**: ~1.5 to 2.5 minutes across all Robolectric and Room migration test suites.
+
+### 2. First Run & Onboarding Flow
+- On initial launch, the app displays the **NoteFlow AI Intro / Onboarding Screen** highlighting privacy features, offline capabilities, and permission requests.
+- No AI model is bundled in the base APK (keeping the initial download size around ~45 MB).
+- **First Model Setup**: Navigating to **Settings > AI Engine** allows downloading the recommended **Gemma 4 E2B (~1.2 GB)** model. On a 100 Mbps Wi-Fi connection, download takes ~5–8 minutes with a progress bar and background resumption support.
+
+### 3. Normal Logcat Output vs. Errors
+When monitoring `adb logcat | grep NoteFlow`:
+- **Expected Informational Logs**:
+  ```text
+  I/NoteFlow: Initializing LiteRtInferenceManager (OpenCL GPU accelerated)
+  I/NoteFlow: SQLCipher database opened successfully
+  I/NoteFlow: HybridRetriever: Stage 1 returned 8 candidates in 32ms
+  I/NoteFlow: GteReranker: Stage 2 scored 8 items in 28ms
+  ```
+- **Benign Fallbacks (Not Bugs)**:
+  - `W/NoteFlow: OpenCL device not found, falling back to CPU XNNPACK backend`: Happens on Android Emulators or devices without OpenCL compute drivers. The app seamlessly continues execution on CPU.
+  - `D/NoteFlow: Suppressing note retrieval for Assistant mode`: Occurs when user switches to general knowledge chat without note grounding.
 
 ---
 
@@ -179,52 +211,105 @@ erDiagram
 ## 🏗️ Key Architecture & Core Subsystems
 
 ### 1. On-Device LLM & RAG Engine
-- **LiteRtInferenceManager** (`data/LiteRtInferenceManager.kt`): Coordinates model loading, context caching, OpenCL GPU acceleration, and CPU fallback. Bridges streaming tokens to Kotlin coroutines via `MessageCallback`.
-- **HybridRetriever** (`data/search/HybridRetriever.kt`): Implements Reciprocal Rank Fusion (RRF) between FTS5 search results and vector nearest-neighbors.
-- **GteRerankerManager** (`data/search/reranker/GteRerankerManager.kt`): Executes quantized INT8 ONNX cross-encoder inference using Unigram Viterbi token pairs (`GteTokenizer.kt`).
-- **OfflineRagPromptBuilder** (`util/OfflineRagPromptBuilder.kt`): Assembles grounded prompt templates, enforcing citation isolation so that notes are only retrieved and referenced when in note-grounded chat mode.
+- **LiteRtInferenceManager** (`app/src/main/java/com/noteflowai/app/data/LiteRtInferenceManager.kt`): Coordinates model loading, context caching, OpenCL GPU acceleration, and CPU fallback. Bridges streaming tokens to Kotlin coroutines via `MessageCallback`.
+- **HybridRetriever** (`app/src/main/java/com/noteflowai/app/data/search/HybridRetriever.kt`): Implements Reciprocal Rank Fusion (RRF) between FTS5 search results and vector nearest-neighbors.
+- **GteRerankerManager** (`app/src/main/java/com/noteflowai/app/data/search/reranker/GteRerankerManager.kt`): Executes quantized INT8 ONNX cross-encoder inference using Unigram Viterbi token pairs (`GteTokenizer.kt`).
+- **OfflineRagPromptBuilder** (`app/src/main/java/com/noteflowai/app/util/OfflineRagPromptBuilder.kt`): Assembles grounded prompt templates, enforcing citation isolation so that notes are only retrieved and referenced when in note-grounded chat mode.
 
 ### 2. Autonomous Memory Layer & Knowledge Graph
-- **MemoryRebuildWorker** (`service/MemoryRebuildWorker.kt`): Asynchronous background worker executed via WorkManager. Features session resumption checkpoints so incremental indexing survives app termination.
-- **Memory Hub** (`ui/screens/MemoryHubScreen.kt`): Displays extracted commitments, conflicting facts requiring resolution, and review digests via reactive Room DAOs (`CommitmentDao`, `ConflictDao`, `ReviewDao`).
+- **MemoryRebuildWorker** (`app/src/main/java/com/noteflowai/app/service/MemoryRebuildWorker.kt`): Asynchronous background worker executed via WorkManager. Features session resumption checkpoints so incremental indexing survives app termination.
+- **Memory Hub** (`app/src/main/java/com/noteflowai/app/ui/screens/MemoryHubScreen.kt`): Displays extracted commitments, conflicting facts requiring resolution, and review digests via reactive Room DAOs (`CommitmentDao`, `ConflictDao`, `ReviewDao`).
 
 ### 3. Speech-to-Text & Omni-Capture
-- **Native whisper.cpp JNI Bridge** (`cpp/whisper.cpp`): Custom JNI integration compiled through Android NDK and CMake, transcribing 16 kHz WAV audio offline without sending audio bytes over the network.
+- **Native whisper.cpp JNI Bridge** (`app/src/main/cpp/whisper.cpp`): Custom JNI integration compiled through Android NDK and CMake, transcribing 16 kHz WAV audio offline without sending audio bytes over the network.
 - **Multi-Source Importers**: Document camera OCR (ML Kit Text Recognition v2), PDF (PdfBox-Android), DOCX (Apache POI), and YouTube transcript importer.
 
 ---
 
-## ⚠️ Known Limitations & Debugging Guide
+## 🚨 Known Bad States & Incident Recovery Playbook
 
-### Device & OS Compatibility
-- **Primary Tested Devices**: Pixel 6a, Pixel 7/8 (Android 13–15, API 33–35), Samsung Galaxy S21/S23 (Android 12–14, API 31–34).
-- **Minimum Supported OS**: Android 8.0 (API 26); Recommended: Android 11+ (API 30+).
-- **Low-Memory Devices (< 6 GB RAM)**:
-  - The Gemma 4 E4B (~2.4 GB) model may cause Android low-memory killer (LMK) aborts on devices with 4–6 GB RAM.
-  - **Resolution**: Use the default **Gemma 4 E2B (~1.2 GB)** model. `android:largeHeap="true"` is declared in `AndroidManifest.xml` to grant maximum heap allocation.
-- **Android Emulators**:
-  - Emulators lacking GPU passthrough will fail to initialize OpenCL compute. The app automatically catches this and falls back to CPU XNNPACK. If debugging emulator graphics, choose "Software GLES 2.0" or test on physical hardware.
+When maintaining or debugging NoteFlow AI in development or production, use this playbook for common failure modes:
 
-### Common Build Failures & Resolutions
+### Playbook 1: Partial or Corrupted Model Downloads
+- **Symptom**: Model download hangs at 99%, or LiteRT throws `Model initialization failed: invalid header / truncated file`.
+- **Root Cause**: Network dropped midway or user backgrounded the app during non-atomic download finalization.
+- **Recovery Procedure**:
+  1. Open device terminal or adb:
+     ```bash
+     adb shell rm -rf /sdcard/Android/data/com.noteflowai.app/cache/models/temp_*
+     adb shell rm -f /sdcard/Android/data/com.noteflowai.app/files/models/*.litertlm
+     ```
+  2. In the app: Go to **Settings > AI Engine**, tap **Delete Model**, then re-tap **Download**.
 
-| Error Message / Symptom | Root Cause | Verified Solution |
-| :--- | :--- | :--- |
-| `CMake '3.22.1' was not found` | CMake missing from SDK tools | Android Studio > SDK Manager > SDK Tools > CMake > Check `3.22.1` > Apply |
-| `ninja: command not found` or NDK build error | NDK version mismatch | Ensure NDK `27.0.12077973` is installed and specified in `app/build.gradle.kts` |
-| `UnsatisfiedLinkError: dlopen failed: library "libOpenCL.so" not found` | Device/emulator lacks OpenCL driver | Ensure `AndroidManifest.xml` includes `<uses-native-library android:name="libOpenCL.so" android:required="false" />` (already configured) |
-| `OutOfMemoryError: Java heap space` during `./gradlew assembleDebug` | Gradle daemon memory cap | Verify `gradle.properties` contains `org.gradle.jvmargs=-Xmx6144m` |
+### Playbook 2: Vector or Segment Index Desynchronization
+- **Symptom**: RAG search yields 0 results even when relevant notes exist, or vector index throws `JsonSyntaxException`.
+- **Root Cause**: Force-close during an older uncommitted index write.
+- **Recovery Procedure**:
+  1. Trigger automated rebuild: In **Settings > Developer / Diagnostics**, tap **Rebuild Knowledge Graph & Vector Index**.
+  2. Or programmatically clear the index file:
+     ```bash
+     adb shell rm -f /data/data/com.noteflowai.app/files/embeddings/vector_index.json
+     ```
+  3. The `MemoryRebuildWorker` automatically detects missing indices and re-indexes all active notes from the encrypted database.
 
-### Runtime Debugging Tips
-- **Filter Logcat**:
-  ```bash
-  adb logcat -v time | grep -E "NoteFlow|LiteRt|HybridRetriever|MemoryRebuild"
-  ```
-- **Inspect Cached Models**:
-  ```bash
-  adb shell ls -lh /sdcard/Android/data/com.noteflowai.app/files/models/
-  ```
-- **Monitor Memory Heap During Inference**:
-  Open **Android Studio > Profiler > Memory**, trigger a RAG conversation, and verify that native and Java heaps stabilize without unbounded spikes.
+### Playbook 3: Low-Memory Killer (LMK) Aborts on Devices with < 6GB RAM
+- **Symptom**: App suddenly vanishes during inference without an unhandled Java stacktrace; logcat shows `lmkd: kill com.noteflowai.app`.
+- **Root Cause**: Attempting to load the 2.4 GB Gemma 4 E4B model on a device with limited physical RAM.
+- **Recovery Procedure**:
+  1. Open app **Settings > AI Engine**.
+  2. Select **Gemma 4 E2B (~1.2 GB)** as the default model.
+  3. Ensure `android:largeHeap="true"` remains active in `AndroidManifest.xml`.
+
+### Playbook 4: Native JNI Audio / Whisper Crash
+- **Symptom**: Tapping the voice recording stop button triggers `SIGSEGV` or `whisper_full failed`.
+- **Root Cause**: Audio buffer captured at non-16kHz sample rate or zero-byte WAV header.
+- **Recovery Procedure**:
+  - Verify audio recorder configuration in `AudioRecordController.kt`: Audio format must be 16-bit PCM, 16,000 Hz, single channel (mono).
+
+---
+
+## 👥 Operational Ownership & Support Model
+
+To ensure accountability and structured collaboration, operational responsibilities are organized as follows:
+
+| Functional Area | Primary Owner | Secondary / Backup | Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Lead Architecture & Core Engine** | NoteFlow AI Core Team | Tech Lead | Core architecture decisions, ADR reviews, Room schema migrations |
+| **On-Device AI & Models Pipeline** | AI / Edge ML Engineer | Core Maintainer | LiteRT-LM updates, ONNX model quantizations, GTE tokenizer & reranker |
+| **Audio & Native C++ (whisper.cpp)** | Native / Systems Engineer | Android Engineer | NDK toolchain, CMake scripts, audio sampling, JNI stability |
+| **UI / UX & Accessibility** | Android Frontend Lead | UI Designer | Jetpack Compose screens, Material 3 theming, TalkBack compliance |
+| **Build & Release Engineering** | Release Engineer | DevOps | Gradle build optimization, release signing, ProGuard mappings, CI/CD |
+| **Security & Privacy Compliance** | Security Officer | Core Architect | Zero-telemetry validation, SQLCipher encryption, secret sanitization |
+
+### Communication Channels:
+- **Bug Reports & Issues**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
+- **Security Vulnerabilities**: File a private advisory or reach maintainers at `dev@noteflowai.com` (do not file public issues for security vulnerabilities).
+
+---
+
+## 🚦 Release Checklist & QA Gate
+
+Before any release build is approved for distribution, all gates below must be verified. A detailed pre-flight form is located in **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)**.
+
+### Gate 1: Automated Verification
+- [ ] `./gradlew :app:assembleDebug` compiles cleanly.
+- [ ] `./gradlew :app:testDebugUnitTest` passes 100% of tests.
+- [ ] `./gradlew :app:lintDebug` passes with no new non-baseline high-severity findings.
+
+### Gate 2: Device Smoke Test Matrix
+- [ ] **Physical Hardware Smoke (API 33+)**: Verified on Pixel 6a/7/8 or Galaxy S21/S23.
+- [ ] **Fresh Install Test**: App starts cleanly, completes onboarding, and creates first note.
+- [ ] **Offline Voice Test**: Airplane Mode enabled; 30-second voice note recorded and transcribed via `whisper.cpp`.
+- [ ] **Local RAG Grounding Test**: Ask question grounded in notes; verify footnote citation `[1]` opens correct source note.
+- [ ] **Insufficient Evidence Refusal**: Ask question outside notes; verify app refuses hallucinated claims.
+
+### Gate 3: Memory & Performance Validation
+- [ ] Run Android Studio Memory Profiler: Peak memory during Gemma 4 E2B generation does not exceed 1.8 GB.
+- [ ] Verify that exiting the chat screen properly releases inference context buffers.
+
+### Gate 4: Release Signing & ProGuard
+- [ ] `./gradlew assembleRelease` signed with production release keystore.
+- [ ] ProGuard mapping file (`app/build/outputs/mapping/release/mapping.txt`) archived for symbolication.
 
 ---
 
@@ -246,23 +331,27 @@ erDiagram
 
 ---
 
-## 📦 Dependency Snapshot
+## 📦 Dependency & Toolchain Snapshot
 
-### Critical Pinned Dependencies
-| Component / Library | Tested Version | Purpose |
-| :--- | :--- | :--- |
-| **JDK** | `17` (Temurin / OpenJDK) | Compiler runtime |
-| **Kotlin** | `2.0.0` | Primary language |
-| **Android Gradle Plugin (AGP)** | `9.2.1` | Build system |
-| **Android NDK** | `27.0.12077973` | C++ compilation for whisper.cpp |
-| **CMake** | `3.22.1` | Native build orchestration |
-| **Jetpack Compose BOM** | `2026.06.01` | Declarative UI framework |
-| **Google LiteRT-LM** | `0.17.1` (`litertlm-android`) | Gemma 4 on-device local inference |
-| **ONNX Runtime Android** | `1.23.2` | Granite embeddings & GTE reranker |
-| **AndroidX Room** | `2.7.1` | Local SQLite database |
-| **SQLCipher Android** | `4.17.0` | Database encryption at rest |
-| **AndroidX WorkManager** | `2.9.1` | Background memory rebuild jobs |
-| **Retrofit / OkHttp** | `2.9.0` / `4.12.0` | Optional remote API calls |
+### Exact Repo Versions (Verified Against Build Scripts)
+| Component / Tool | Verified Version | Configuration Location | Purpose |
+| :--- | :--- | :--- | :--- |
+| **JDK** | `17` | `app/build.gradle.kts` | OpenJDK / Temurin Java runtime |
+| **Kotlin** | `2.0.0` | `build.gradle.kts` | Language version |
+| **Android Gradle Plugin (AGP)** | `8.7.0` | `build.gradle.kts` | Root Android build system plugin |
+| **Compose Compiler Plugin** | `2.0.0` | `app/build.gradle.kts` | Kotlin Compose compiler plugin |
+| **Compose BOM** | `2026.06.01` | `app/build.gradle.kts` | Jetpack Compose BOM |
+| **Compile SDK / Target SDK** | `35` / `35` | `app/build.gradle.kts` | Android 15 SDK target |
+| **Min SDK** | `26` | `app/build.gradle.kts` | Android 8.0 baseline |
+| **Android NDK** | `27.0.12077973` | `app/build.gradle.kts` | C++ compilation for whisper.cpp |
+| **CMake** | `3.22.1` | `app/build.gradle.kts` | Native CMake build system |
+| **KSP** | `2.0.0-1.0.24` | `build.gradle.kts` | Kotlin Symbol Processing (Room) |
+| **Google LiteRT-LM** | `0.17.1` | `app/build.gradle.kts` | `litertlm-android` Gemma 4 inference |
+| **ONNX Runtime Android** | `1.23.2` | `app/build.gradle.kts` | Granite embeddings & GTE reranker |
+| **AndroidX Room** | `2.7.1` | `app/build.gradle.kts` | SQLite database layer |
+| **SQLCipher Android** | `4.17.0` | `app/build.gradle.kts` | AES-256 database encryption at rest |
+| **AndroidX WorkManager** | `2.9.1` | `app/build.gradle.kts` | Background memory rebuild jobs |
+| **Retrofit / OkHttp** | `2.9.0` / `4.12.0` | `app/build.gradle.kts` | Remote optional LLM APIs |
 
 ---
 
@@ -281,7 +370,7 @@ erDiagram
 
 ## 🛠️ Developer Setup & Quick Verification
 
-For complete setup instructions and release signing steps, consult [SETUP.md](file:///h:/Work/NoteFlowAI/SETUP.md).
+For complete setup instructions and release signing steps, consult **[SETUP.md](SETUP.md)**.
 
 ### Quick Verification Commands:
 ```bash
@@ -299,7 +388,7 @@ For complete setup instructions and release signing steps, consult [SETUP.md](fi
 
 ## 🛡️ Contributing & Security Policy
 
-All code contributions must follow the strict privacy and zero-telemetry guidelines outlined in [CONTRIBUTING.md](file:///h:/Work/NoteFlowAI/CONTRIBUTING.md).
+All code contributions must follow the strict privacy and zero-telemetry guidelines outlined in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 - **Private by Design**: No telemetry, analytics, or crash reporters.
 - **Never Commit Secrets**: No API keys, credentials, or keystores in git.
 - **Never Commit Model Binaries**: Weights are downloaded on-demand into app storage.
