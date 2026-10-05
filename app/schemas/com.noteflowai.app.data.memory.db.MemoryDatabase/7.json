@@ -1,0 +1,1494 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "15d8ea5ef7473a7ea9da0de82ae8fd06",
+    "entities": [
+      {
+        "tableName": "source_segments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `sourceType` TEXT NOT NULL, `text` TEXT NOT NULL, `normalizedText` TEXT NOT NULL, `startMs` INTEGER, `endMs` INTEGER, `pageNumber` INTEGER, `blockId` TEXT, `url` TEXT, `speaker` TEXT, `language` TEXT, `transcriptionEngine` TEXT, `confidence` REAL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `isOriginalContent` INTEGER NOT NULL DEFAULT 1, `parentSegmentId` TEXT, `metadataJson` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "sourceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedText",
+            "columnName": "normalizedText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pageNumber",
+            "columnName": "pageNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "blockId",
+            "columnName": "blockId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "speaker",
+            "columnName": "speaker",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "language",
+            "columnName": "language",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transcriptionEngine",
+            "columnName": "transcriptionEngine",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isOriginalContent",
+            "columnName": "isOriginalContent",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "parentSegmentId",
+            "columnName": "parentSegmentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metadataJson",
+            "columnName": "metadataJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_source_segments_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_source_segments_sourceType",
+            "unique": false,
+            "columnNames": [
+              "sourceType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_sourceType` ON `${TABLE_NAME}` (`sourceType`)"
+          },
+          {
+            "name": "index_source_segments_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          },
+          {
+            "name": "index_source_segments_startMs",
+            "unique": false,
+            "columnNames": [
+              "startMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_startMs` ON `${TABLE_NAME}` (`startMs`)"
+          },
+          {
+            "name": "index_source_segments_pageNumber",
+            "unique": false,
+            "columnNames": [
+              "pageNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_pageNumber` ON `${TABLE_NAME}` (`pageNumber`)"
+          },
+          {
+            "name": "index_source_segments_sourceId_sourceType",
+            "unique": false,
+            "columnNames": [
+              "sourceId",
+              "sourceType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_source_segments_sourceId_sourceType` ON `${TABLE_NAME}` (`sourceId`, `sourceType`)"
+          }
+        ]
+      },
+      {
+        "tableName": "entities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `canonicalName` TEXT NOT NULL, `aliasesJson` TEXT, `normalizedName` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `confidence` REAL NOT NULL, `userConfirmed` INTEGER NOT NULL, `confirmation` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalName",
+            "columnName": "canonicalName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aliasesJson",
+            "columnName": "aliasesJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedName",
+            "columnName": "normalizedName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userConfirmed",
+            "columnName": "userConfirmed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmation",
+            "columnName": "confirmation",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_entities_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_entities_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_entities_normalizedName",
+            "unique": false,
+            "columnNames": [
+              "normalizedName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_entities_normalizedName` ON `${TABLE_NAME}` (`normalizedName`)"
+          },
+          {
+            "name": "index_entities_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_entities_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "entity_mentions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entityId` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `mentionText` TEXT NOT NULL, `confidence` REAL NOT NULL, `createdAt` INTEGER NOT NULL, `confirmation` TEXT NOT NULL, PRIMARY KEY(`entityId`, `sourceSegmentId`))",
+        "fields": [
+          {
+            "fieldPath": "entityId",
+            "columnName": "entityId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mentionText",
+            "columnName": "mentionText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmation",
+            "columnName": "confirmation",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "entityId",
+            "sourceSegmentId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_entity_mentions_entityId",
+            "unique": false,
+            "columnNames": [
+              "entityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_entity_mentions_entityId` ON `${TABLE_NAME}` (`entityId`)"
+          },
+          {
+            "name": "index_entity_mentions_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_entity_mentions_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "memory_objects",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `statement` TEXT NOT NULL, `normalizedStatement` TEXT NOT NULL, `status` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `projectEntityId` TEXT, `ownerEntityId` TEXT, `confidence` REAL NOT NULL, `extractionModel` TEXT, `extractedAt` INTEGER NOT NULL, `confirmedAt` INTEGER, `dueAt` INTEGER, `reviewAt` INTEGER, `metadataJson` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "statement",
+            "columnName": "statement",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedStatement",
+            "columnName": "normalizedStatement",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectEntityId",
+            "columnName": "projectEntityId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ownerEntityId",
+            "columnName": "ownerEntityId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extractionModel",
+            "columnName": "extractionModel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "extractedAt",
+            "columnName": "extractedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmedAt",
+            "columnName": "confirmedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "dueAt",
+            "columnName": "dueAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "reviewAt",
+            "columnName": "reviewAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "metadataJson",
+            "columnName": "metadataJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memory_objects_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_memory_objects_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_memory_objects_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          },
+          {
+            "name": "index_memory_objects_sourceId",
+            "unique": false,
+            "columnNames": [
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_sourceId` ON `${TABLE_NAME}` (`sourceId`)"
+          },
+          {
+            "name": "index_memory_objects_projectEntityId",
+            "unique": false,
+            "columnNames": [
+              "projectEntityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_projectEntityId` ON `${TABLE_NAME}` (`projectEntityId`)"
+          },
+          {
+            "name": "index_memory_objects_ownerEntityId",
+            "unique": false,
+            "columnNames": [
+              "ownerEntityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_ownerEntityId` ON `${TABLE_NAME}` (`ownerEntityId`)"
+          },
+          {
+            "name": "index_memory_objects_extractedAt",
+            "unique": false,
+            "columnNames": [
+              "extractedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_objects_extractedAt` ON `${TABLE_NAME}` (`extractedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "decisions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `memoryObjectId` TEXT NOT NULL, `statement` TEXT NOT NULL, `reason` TEXT, `alternativesJson` TEXT, `status` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `decidedAt` INTEGER, `reviewAt` INTEGER, `projectEntityId` TEXT, `confidence` REAL NOT NULL, `userConfirmed` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`memoryObjectId`) REFERENCES `memory_objects`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memoryObjectId",
+            "columnName": "memoryObjectId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "statement",
+            "columnName": "statement",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "alternativesJson",
+            "columnName": "alternativesJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "decidedAt",
+            "columnName": "decidedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "reviewAt",
+            "columnName": "reviewAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "projectEntityId",
+            "columnName": "projectEntityId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userConfirmed",
+            "columnName": "userConfirmed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_decisions_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_decisions_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_decisions_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_decisions_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          },
+          {
+            "name": "index_decisions_projectEntityId",
+            "unique": false,
+            "columnNames": [
+              "projectEntityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_decisions_projectEntityId` ON `${TABLE_NAME}` (`projectEntityId`)"
+          },
+          {
+            "name": "index_decisions_decidedAt",
+            "unique": false,
+            "columnNames": [
+              "decidedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_decisions_decidedAt` ON `${TABLE_NAME}` (`decidedAt`)"
+          },
+          {
+            "name": "index_decisions_memoryObjectId",
+            "unique": false,
+            "columnNames": [
+              "memoryObjectId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_decisions_memoryObjectId` ON `${TABLE_NAME}` (`memoryObjectId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "memory_objects",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "memoryObjectId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "commitments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `memoryObjectId` TEXT NOT NULL, `action` TEXT NOT NULL, `ownerText` TEXT, `ownerEntityId` TEXT, `dueAt` INTEGER, `status` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `projectEntityId` TEXT, `confidence` REAL NOT NULL, `userConfirmed` INTEGER NOT NULL, `completedAt` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`memoryObjectId`) REFERENCES `memory_objects`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memoryObjectId",
+            "columnName": "memoryObjectId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "action",
+            "columnName": "action",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ownerText",
+            "columnName": "ownerText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ownerEntityId",
+            "columnName": "ownerEntityId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dueAt",
+            "columnName": "dueAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "projectEntityId",
+            "columnName": "projectEntityId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userConfirmed",
+            "columnName": "userConfirmed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_commitments_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_commitments_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          },
+          {
+            "name": "index_commitments_projectEntityId",
+            "unique": false,
+            "columnNames": [
+              "projectEntityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_projectEntityId` ON `${TABLE_NAME}` (`projectEntityId`)"
+          },
+          {
+            "name": "index_commitments_ownerEntityId",
+            "unique": false,
+            "columnNames": [
+              "ownerEntityId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_ownerEntityId` ON `${TABLE_NAME}` (`ownerEntityId`)"
+          },
+          {
+            "name": "index_commitments_dueAt",
+            "unique": false,
+            "columnNames": [
+              "dueAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_dueAt` ON `${TABLE_NAME}` (`dueAt`)"
+          },
+          {
+            "name": "index_commitments_memoryObjectId",
+            "unique": false,
+            "columnNames": [
+              "memoryObjectId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_commitments_memoryObjectId` ON `${TABLE_NAME}` (`memoryObjectId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "memory_objects",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "memoryObjectId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "memory_relations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `fromType` TEXT NOT NULL, `fromId` TEXT NOT NULL, `toType` TEXT NOT NULL, `toId` TEXT NOT NULL, `relationType` TEXT NOT NULL, `sourceSegmentId` TEXT, `confidence` REAL NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fromType",
+            "columnName": "fromType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fromId",
+            "columnName": "fromId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toType",
+            "columnName": "toType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toId",
+            "columnName": "toId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationType",
+            "columnName": "relationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memory_relations_fromType_fromId",
+            "unique": false,
+            "columnNames": [
+              "fromType",
+              "fromId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_relations_fromType_fromId` ON `${TABLE_NAME}` (`fromType`, `fromId`)"
+          },
+          {
+            "name": "index_memory_relations_toType_toId",
+            "unique": false,
+            "columnNames": [
+              "toType",
+              "toId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_relations_toType_toId` ON `${TABLE_NAME}` (`toType`, `toId`)"
+          },
+          {
+            "name": "index_memory_relations_relationType",
+            "unique": false,
+            "columnNames": [
+              "relationType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_relations_relationType` ON `${TABLE_NAME}` (`relationType`)"
+          },
+          {
+            "name": "index_memory_relations_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_relations_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "memory_review_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `referencedObjectId` TEXT NOT NULL, `reason` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `resolvedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "referencedObjectId",
+            "columnName": "referencedObjectId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolvedAt",
+            "columnName": "resolvedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memory_review_items_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_review_items_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_memory_review_items_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_review_items_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_memory_review_items_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_review_items_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "answer_citations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `answerId` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `claimIndex` INTEGER NOT NULL, `locationType` TEXT NOT NULL, `startMs` INTEGER, `endMs` INTEGER, `pageNumber` INTEGER, `url` TEXT, `supportStatus` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "answerId",
+            "columnName": "answerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "claimIndex",
+            "columnName": "claimIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "locationType",
+            "columnName": "locationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pageNumber",
+            "columnName": "pageNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "supportStatus",
+            "columnName": "supportStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_answer_citations_answerId",
+            "unique": false,
+            "columnNames": [
+              "answerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_answer_citations_answerId` ON `${TABLE_NAME}` (`answerId`)"
+          },
+          {
+            "name": "index_answer_citations_sourceSegmentId",
+            "unique": false,
+            "columnNames": [
+              "sourceSegmentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_answer_citations_sourceSegmentId` ON `${TABLE_NAME}` (`sourceSegmentId`)"
+          },
+          {
+            "name": "index_answer_citations_supportStatus",
+            "unique": false,
+            "columnNames": [
+              "supportStatus"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_answer_citations_supportStatus` ON `${TABLE_NAME}` (`supportStatus`)"
+          }
+        ]
+      },
+      {
+        "tableName": "conflicts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `conflictType` TEXT NOT NULL, `objectIds` TEXT NOT NULL, `sourceSegmentIds` TEXT NOT NULL, `firstObservedAt` INTEGER NOT NULL, `latestObservedAt` INTEGER NOT NULL, `confidence` REAL NOT NULL, `status` TEXT NOT NULL, `resolution` TEXT, `createdAt` INTEGER NOT NULL, `resolvedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conflictType",
+            "columnName": "conflictType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "objectIds",
+            "columnName": "objectIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentIds",
+            "columnName": "sourceSegmentIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstObservedAt",
+            "columnName": "firstObservedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latestObservedAt",
+            "columnName": "latestObservedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolution",
+            "columnName": "resolution",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolvedAt",
+            "columnName": "resolvedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_conflicts_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conflicts_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_conflicts_conflictType",
+            "unique": false,
+            "columnNames": [
+              "conflictType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conflicts_conflictType` ON `${TABLE_NAME}` (`conflictType`)"
+          },
+          {
+            "name": "index_conflicts_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_conflicts_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "processing_status",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sourceId` TEXT NOT NULL, `sourceType` TEXT NOT NULL, `currentStage` TEXT NOT NULL, `status` TEXT NOT NULL, `error` TEXT, `attempts` INTEGER NOT NULL, `startedAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `completedAt` INTEGER, PRIMARY KEY(`sourceId`))",
+        "fields": [
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "sourceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentStage",
+            "columnName": "currentStage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "attempts",
+            "columnName": "attempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sourceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_processing_status_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_processing_status_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_processing_status_sourceType",
+            "unique": false,
+            "columnNames": [
+              "sourceType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_processing_status_sourceType` ON `${TABLE_NAME}` (`sourceType`)"
+          }
+        ]
+      },
+      {
+        "tableName": "raw_captures",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sourceId` TEXT NOT NULL, `title` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `sourceType` TEXT NOT NULL, `rawText` TEXT, `audioUri` TEXT, `status` TEXT NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`sourceId`))",
+        "fields": [
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "sourceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "rawText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "audioUri",
+            "columnName": "audioUri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sourceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_raw_captures_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_raw_captures_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      },
+      {
+        "tableName": "timeline_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `startMs` INTEGER, `endMs` INTEGER, `precision` TEXT NOT NULL, `sourceSegmentId` TEXT NOT NULL, `sourceNoteId` TEXT NOT NULL, `confidence` REAL NOT NULL, `confirmation` TEXT NOT NULL, `originalExtraction` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "precision",
+            "columnName": "precision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSegmentId",
+            "columnName": "sourceSegmentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceNoteId",
+            "columnName": "sourceNoteId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmation",
+            "columnName": "confirmation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalExtraction",
+            "columnName": "originalExtraction",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_timeline_entries_startMs",
+            "unique": false,
+            "columnNames": [
+              "startMs"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_timeline_entries_startMs` ON `${TABLE_NAME}` (`startMs`)"
+          },
+          {
+            "name": "index_timeline_entries_sourceNoteId",
+            "unique": false,
+            "columnNames": [
+              "sourceNoteId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_timeline_entries_sourceNoteId` ON `${TABLE_NAME}` (`sourceNoteId`)"
+          },
+          {
+            "name": "index_timeline_entries_confirmation",
+            "unique": false,
+            "columnNames": [
+              "confirmation"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_timeline_entries_confirmation` ON `${TABLE_NAME}` (`confirmation`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '15d8ea5ef7473a7ea9da0de82ae8fd06')"
+    ]
+  }
+}

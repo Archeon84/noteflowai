@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Microphone capsule (rounded rectangle body) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48.5,34 C48.5,29.858 51.858,26.5 56,26.5 C60.142,26.5 63.5,29.858 63.5,34 L63.5,49 C63.5,53.142 60.142,56.5 56,56.5 C51.858,56.5 48.5,53.142 48.5,49 Z" />
+
+    <!-- Cradle arc around the mic -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M42,48 C42,57.388 48.112,63.5 56,63.5 C63.888,63.5 70,57.388 70,48" />
+
+    <!-- Stand stem -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M56,63.5 L56,70" />
+
+    <!-- Stand base -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M49,70 L63,70" />
+
+    <!-- Sound wave arcs (left side) - suggests audio capture / AI listening -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.55"
+        android:pathData="M39,40 C36.5,43.5 36.5,49.5 39,53" />
+
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.35"
+        android:pathData="M34,37 C30,42.5 30,50.5 34,56" />
+
+    <!-- Sound wave arcs (right side) - symmetric -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.55"
+        android:pathData="M73,40 C75.5,43.5 75.5,49.5 73,53" />
+
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.35"
+        android:pathData="M78,37 C82,42.5 82,50.5 78,56" />
+
+    <!-- Mic capsule detail lines (texture) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4F46E5"
+        android:strokeWidth="0.8"
+        android:strokeAlpha="0.2"
+        android:pathData="M52,33 L60,33" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4F46E5"
+        android:strokeWidth="0.8"
+        android:strokeAlpha="0.2"
+        android:pathData="M52,37 L60,37" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4F46E5"
+        android:strokeWidth="0.8"
+        android:strokeAlpha="0.2"
+        android:pathData="M52,41 L60,41" />
+</vector>

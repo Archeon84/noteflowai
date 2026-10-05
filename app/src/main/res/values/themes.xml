@@ -1,0 +1,20 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme for the Activity window.
+         Compose handles all UI theming internally via NoteFlowTheme.
+         This only sets the system bar colors and window background. -->
+    <style name="Theme.NoteFlowAI" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary brand color for system bars -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+
+        <!-- Secondary brand color -->
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+
+        <!-- Status bar color -->
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+
+        <!-- Background -->
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>

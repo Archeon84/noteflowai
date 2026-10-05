@@ -1,0 +1,86 @@
+[
+  {
+    "question": "What was the decision about the March risk review?",
+    "expectedNoteIds": ["note_2026-03-risk.md"],
+    "expectedKeywords": ["risk", "mitigation"],
+    "mustCite": true,
+    "expectNotFound": false
+  },
+  {
+    "question": "Did we commit to a schedule for the API migration?",
+    "expectedNoteIds": ["note_2026-06-api.md"],
+    "expectedKeywords": ["migration", "schedule"],
+    "mustCite": true,
+    "expectNotFound": false
+  },
+  {
+    "question": "Summarize the onboarding notes.",
+    "expectedNoteIds": ["note_2026-01-onboarding.md"],
+    "expectedKeywords": ["onboarding"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "What happened around March this year?",
+    "expectedNoteIds": ["note_2026-03-risk.md", "note_2026-03-sprint.md"],
+    "expectedKeywords": ["march"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "What is the current status of the Project Athena initiative?",
+    "expectedNoteIds": ["note_2026-02-athena.md"],
+    "expectedKeywords": ["athena"],
+    "mustCite": true,
+    "expectNotFound": false
+  },
+  {
+    "question": "Compare the Q1 and Q2 budgeting approaches.",
+    "expectedNoteIds": ["note_2026-02-budget.md", "note_2026-05-budget.md"],
+    "expectedKeywords": ["budget", "comparison"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "What broad themes emerged across all project notes?",
+    "expectedNoteIds": [],
+    "expectedKeywords": ["theme"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "note with no matching content anywhere",
+    "expectedNoteIds": [],
+    "expectedKeywords": [],
+    "mustCite": false,
+    "expectNotFound": true
+  },
+  {
+    "question": "What decisions were made about the API migration?",
+    "expectedNoteIds": ["note_2026-06-api.md"],
+    "expectedKeywords": ["decision", "api"],
+    "mustCite": true,
+    "expectNotFound": false
+  },
+  {
+    "question": "What commitments are overdue?",
+    "expectedNoteIds": [],
+    "expectedKeywords": ["overdue", "commitment"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "Who is Alice and what is she working on?",
+    "expectedNoteIds": [],
+    "expectedKeywords": ["alice"],
+    "mustCite": false,
+    "expectNotFound": false
+  },
+  {
+    "question": "Are there any contradictions in my notes?",
+    "expectedNoteIds": [],
+    "expectedKeywords": ["conflict"],
+    "mustCite": false,
+    "expectNotFound": false
+  }
+]

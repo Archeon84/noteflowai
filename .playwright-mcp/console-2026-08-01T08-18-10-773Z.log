@@ -1,0 +1,20 @@
+[    2577ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://stackoverflow.com/questions/79692173/how-to-resolve-deprecated-clipboardmanager-in-jetpack-compose:0
+[    3100ms] [ERROR] Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep @ https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:0
+[    3198ms] [ERROR] Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep @ https://local.adguard.org/?ts=1785571024352&name=AdGuard%20Popup%20Blocker&name=AdGuard%20Assistant&name=AdGuard%20Extra&name=Web%20of%20Trust&type=user-script:0
+[    4724ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://stackoverflow.com/favicon.ico:0
+[    6554ms] [WARNING] Error with Feature-Policy header: Unrecognized feature: 'speaker'. @ :0
+[    6627ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://stackoverflow.com/px.js?ch=1:0
+[    6628ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://stackoverflow.com/px.js?ch=2:0
+[    6927ms] Uncaught Error: CssParser: parse error at position 164
+    at error (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:7:40946)
+    at parseCss (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:7:41471)
+    at parseCss (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:7:42654)
+    at M (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:7:46430)
+    at <anonymous> (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:11:83)
+    at <anonymous> (https://local.adguard.org/?ts=1785571024352&type=content-script&dmn=stackoverflow.com&app=chrome.exe&css=1&js=1&gcss=1&rel=1&rji=1&sbe=0&stealth=1&uag=:11:285)
+[    9045ms] TypeError: Cannot read properties of undefined (reading 'init')
+    at HTMLDocument.initGa (https://stackoverflow.com/questions/79692173/how-to-resolve-deprecated-clipboardmanager-in-jetpack-compose:2789:34)
+[   10350ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://securepubads.g.doubleclick.net/tag/js/gpt.js:0
+[   10656ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://htlbid.com/v3/mapping.base/htlbid.js?v=1.4:0
+[   12568ms] [ERROR] Not signed in with the identity provider. @ https://stackoverflow.com/questions/79692173/how-to-resolve-deprecated-clipboardmanager-in-jetpack-compose:0
+[   12944ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token. @ https://accounts.google.com/gsi/client:87
