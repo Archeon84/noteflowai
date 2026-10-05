@@ -70,6 +70,8 @@ Before submitting a Pull Request, verify your changes against this checklist:
 - Create a feature branch from `main`: `git checkout -b feature/your-feature-name`.
 - Use descriptive commit messages following the Conventional Commits specification (e.g., `feat(rag): ...`, `fix(memory): ...`, `docs: ...`).
 - Open a PR against `main` on [Archeon84/noteflowai](https://github.com/Archeon84/noteflowai).
+- **Merge Requirements**: Every PR must pass the automated GitHub Actions Android CI pipeline (`testDebugUnitTest` and `assembleDebug`) and receive at least one code review approval before merging into `main`.
+- **Release Sign-Off**: Production releases are tagged with semantic versioning (`vMAJOR.MINOR.PATCH`) from `main` and require sign-off from both the Lead Architect and Release Engineer.
 
 ---
 

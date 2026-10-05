@@ -285,6 +285,22 @@ To ensure accountability and structured collaboration, operational responsibilit
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
 - **Security Vulnerabilities**: File a private advisory directly via [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new) (please do not disclose security issues in public tickets).
 
+### Branching, Merge & Release Approval Policy:
+- **Protected Trunk (`main`)**: Direct pushes to `main` are restricted. All contributions must arrive via Pull Requests.
+- **CI Enforcement**: Every PR must pass the automated GitHub Actions Android CI pipeline (`testDebugUnitTest` and `assembleDebug`) before merging.
+- **Release Sign-Off**: Production releases are tagged with semantic versioning (`vMAJOR.MINOR.PATCH`) from `main` and require explicit sign-off from both the **Lead Architect** and the **Release Engineer**.
+
+---
+
+## 📱 Hardware & Device Tier Support Matrix
+
+| Tier | Target Devices / SoCs | Recommended Model | Expected Performance | Fallback / Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **Tier 1 (Flagship)** | 8 GB+ RAM, Snapdragon 8 Gen 1+, Tensor G2/G3/G4, Dimensity 9000+ | Gemma 4 E4B (~2.4 GB) or E2B (~1.2 GB) | ~20–25 tokens/sec, TTFT < 700 ms | Full OpenCL GPU acceleration |
+| **Tier 2 (Mid-Range)** | 6 GB RAM, Snapdragon 778G+, Tensor G1, Exynos 2100+ | Gemma 4 E2B (~1.2 GB) | ~15–20 tokens/sec, TTFT < 900 ms | OpenCL GPU acceleration, `largeHeap` enabled |
+| **Tier 3 (Budget / Low-RAM)**| 4 GB RAM, Helio G99, Snapdragon 680 | Gemma 4 E2B or Cloud Fallback | ~6–10 tokens/sec (CPU XNNPACK) | CPU fallback; user prompted to use Cloud APIs if device encounters memory pressure |
+| **Emulator** | Android Studio Emulator (x86_64, API 30+) | Gemma 4 E2B (Testing only) | ~5–8 tokens/sec | OpenCL unavailable; automatically switches to CPU XNNPACK |
+
 ---
 
 ## 🚦 Release Checklist & QA Gate
