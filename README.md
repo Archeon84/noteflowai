@@ -3,6 +3,7 @@
 > **100% Private, On-Device AI Note-Taking with a 2-Stage Hybrid RAG System & Autonomous Personal Memory Layer**
 
 [![Android CI](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml)
+[![Android Release CD](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Android-API%2026%E2%80%9335-green.svg?logo=android)](https://developer.android.com)
 [![Google LiteRT-LM](https://img.shields.io/badge/Google-LiteRT--LM%200.17.1-orange.svg)](https://ai.google.dev/edge/litert)
@@ -16,7 +17,7 @@
 
 | Dimension | Specification | Verification Source / Date |
 | :--- | :--- | :--- |
-| **CI Build Status** | [![Android CI](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml) | Automated GitHub Actions workflow (`.github/workflows/android.yml`) |
+| **CI/CD Pipeline Status** | [![Android CI](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml) [![Android Release CD](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml) | Automated GitHub Actions CI & Release CD (`.github/workflows/`) |
 | **Local Test Baseline** | ✅ **Verified Green (0 failures)** | Verified: October 2026 on commit `ad17d2c` via `./gradlew testDebugUnitTest` |
 | **App Stability Stage** | 🟡 **Stable Core / Release-Candidate (v3.0.0)** | Feature-complete 2-stage RAG, local LiteRT-LM & memory graph. Device-tier tuning ongoing. |
 | **Supported OS** | **Android 8.0 to Android 15** (API 26–35) | Tested against Pixel 6a/7/8 (API 33–35) & Galaxy S21/S23 (API 31–34) |
@@ -143,7 +144,7 @@ NoteFlowAI/
 │   ├── cpp/                               # Native whisper.cpp C++ implementation & CMakeLists
 │   └── res/                               # Layouts, vector drawables, localized strings.xml
 ├── docs/                                  # Release checklist & architecture specifications
-├── .github/workflows/                     # Automated GitHub Actions Android CI pipeline
+├── .github/workflows/                     # Automated GitHub Actions CI & Release CD pipelines
 └── macrobenchmark/                        # Startup & scrolling performance benchmark tests
 ```
 

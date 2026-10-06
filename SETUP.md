@@ -111,6 +111,44 @@ export KEY_PASSWORD=your_key_password
 
 ---
 
+## 🚀 Automated CI/CD (GitHub Actions)
+
+NoteFlow AI is equipped with continuous integration and release delivery workflows in `.github/workflows/`:
+
+### 1. Android CI (`android.yml`)
+- **Triggers**: Pull requests targeting `main`, pushes to `main`, or manual `workflow_dispatch`.
+- **Pipeline Actions**:
+  1. Sets up JDK 17, Android NDK `27.0.12077973`, and CMake `3.22.1` (with cache optimization).
+  2. Executes the full unit test suite (`./gradlew testDebugUnitTest`).
+  3. Runs Android lint checks (`./gradlew lintDebug`).
+  4. Assembles the debug APK (`./gradlew assembleDebug`).
+  5. Uploads test reports, lint results, and the debug APK (`app-debug.apk`) as workflow artifacts for immediate testing.
+
+### 2. Android Release CD (`release.yml`)
+- **Triggers**: Pushing a release tag (e.g., `git tag v3.0.0 && git push origin v3.0.0`) or manual `workflow_dispatch`.
+- **Pipeline Actions**:
+  1. Validates test suite integrity prior to packaging.
+  2. Decodes the release signing keystore from repository secrets if configured.
+  3. Builds production Release APK (`assembleRelease`) and Android App Bundle (`bundleRelease`).
+  4. Generates cryptographic SHA-256 checksums (`checksums.txt`) for all release binaries.
+  5. Uploads build artifacts and ProGuard/R8 obfuscation mappings (`mapping.txt`).
+  6. Creates a published GitHub Release with automated changelog notes and attaches the APK, AAB, and checksums.
+
+### 3. Configuring Release Secrets for GitHub Actions
+To enable automated signing in the release workflow:
+1. Go to your repository on GitHub: **Settings > Secrets and variables > Actions**.
+2. Click **New repository secret** and configure:
+   - `KEYSTORE_BASE64`: Base64 string of your `release.jks`:
+     - **PowerShell**: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("keystore/release.jks")) | Set-Clipboard`
+     - **macOS / Linux**: `base64 -w 0 keystore/release.jks | pbcopy`
+   - `KEYSTORE_PASSWORD`: Keystore password.
+   - `KEY_ALIAS`: Key alias name (e.g. `noteflowai`).
+   - `KEY_PASSWORD`: Key password.
+
+*(If secrets are not yet configured, the CD pipeline builds unsigned release binaries and generates checksums without failing).*
+
+---
+
 ## ☁️ Google Drive Backup Setup
 
 The app utilizes manual Google Sign-In with OAuth 2.0 (Play Services Auth), meaning `google-services.json` is **not required**.
