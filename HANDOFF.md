@@ -6,19 +6,21 @@ Welcome to **NoteFlow AI** — a 100% private, on-device note-taking system equi
 
 ## 📋 Table of Contents
 1. [Executive Overview](#-executive-overview)
-2. [What a First-Time Developer Should Expect](#-what-a-first-time-developer-should-expect)
-3. [Visual Architecture & Subsystem Diagrams](#-visual-architecture--subsystem-diagrams)
-4. [Architecture Decision Highlights (ADRs)](#-architecture-decision-highlights-adrs)
-5. [Key Architecture & Core Subsystems](#-key-architecture--core-subsystems)
-6. [Known Bad States & Incident Recovery Playbook](#-known-bad-states--incident-recovery-playbook)
-7. [Operational Ownership & Support Model](#-operational-ownership--support-model)
-8. [Release Checklist & QA Gate](#-release-checklist--qa-gate)
-9. [Performance Baselines](#-performance-baselines)
-10. [Dependency & Toolchain Snapshot](#-dependency--toolchain-snapshot)
-11. [On-Device & Cloud AI Models Catalog](#-on-device--cloud-ai-models-catalog)
-12. [Developer Setup & Quick Verification](#-developer-setup--quick-verification)
-13. [Contributing & Security Policy](#-contributing--security-policy)
-14. [Roadmap & Next Steps](#-roadmap--next-steps)
+2. [Contributor Entry Points & Workflow Map](#-contributor-entry-points--workflow-map)
+3. [What a First-Time Developer Should Expect](#-what-a-first-time-developer-should-expect)
+4. [Visual Architecture & Subsystem Diagrams](#-visual-architecture--subsystem-diagrams)
+5. [Architecture Decision Highlights (ADRs)](#-architecture-decision-highlights-adrs)
+6. [Key Architecture & Core Subsystems](#-key-architecture--core-subsystems)
+7. [Hardware & Device Tier Support Matrix](#-hardware--device-tier-support-matrix)
+8. [Known Bad States & Incident Recovery Playbook](#-known-bad-states--incident-recovery-playbook)
+9. [Operational Ownership & Support Model](#-operational-ownership--support-model)
+10. [Release Checklist & QA Gate](#-release-checklist--qa-gate)
+11. [Performance Baselines](#-performance-baselines)
+12. [Dependency & Toolchain Snapshot](#-dependency--toolchain-snapshot)
+13. [On-Device & Cloud AI Models Catalog](#-on-device--cloud-ai-models-catalog)
+14. [Developer Setup & Quick Verification](#-developer-setup--quick-verification)
+15. [Contributing & Security Policy](#-contributing--security-policy)
+16. [Roadmap & Next Steps](#-roadmap--next-steps)
 
 ---
 
@@ -34,7 +36,20 @@ NoteFlow AI is built to give users an **autonomous, private second brain** opera
 
 ---
 
-## 🧭 What a First-Time Developer Should Expect
+## 🧭 Contributor Entry Points & Workflow Map
+
+| If you want to... | Start Here | What you will find |
+| :--- | :--- | :--- |
+| **Compile & install the app locally** | 🚀 **[SETUP.md](SETUP.md)** | 5-minute setup, NDK/CMake sync, run commands & build troubleshooting |
+| **Understand system design & ADRs** | 📖 **[HANDOFF.md](HANDOFF.md)** | Architecture diagrams, trade-off decisions, incident runbook & ownership |
+| **Contribute code or submit a PR** | 🛡️ **[CONTRIBUTING.md](CONTRIBUTING.md)** | PR requirements, code conventions, zero-telemetry rules & secret policies |
+| **Validate release candidate readiness** | ✅ **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)** | Automated gates, manual smoke tests & signing procedures |
+| **Debug or recover from bad states** | 🚨 **[Incident Runbook](#-known-bad-states--incident-recovery-playbook)** | Model corruption recovery, vector index reset, and OOM failover |
+| **Report a security vulnerability** | 🔒 **[Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new)** | Private vulnerability disclosure portal |
+
+---
+
+## ⏱️ What a First-Time Developer Should Expect
 
 When checking out and building NoteFlow AI for the first time, here are the exact timings, behaviors, and expected milestones:
 
@@ -331,9 +346,9 @@ Before any release build is approved for distribution, all gates below must be v
 
 ## ⚡ Performance Baselines
 
-*Tested on Google Pixel 6a (Tensor G1, 6GB RAM, Android 14):*
+> **Empirical Context**: Metrics below represent empirical baseline measurements performed on a physical **Google Pixel 6a** (Google Tensor G1 SoC, 6 GB RAM, Android 14) under ambient room temperatures. Latencies and tokens/sec are representative reference figures and will naturally vary based on device SoC tier, background system load, thermal throttling, and available memory.
 
-| Operation | Typical Latency | Notes |
+| Operation | Typical Latency (Pixel 6a) | Notes |
 | :--- | :--- | :--- |
 | **First-Launch Model Download (E2B)** | ~6–8 min | 1.2 GB download over 100 Mbps Wi-Fi |
 | **Note Indexing (1,000 words)** | ~45–60 ms | Segmenting, FTS5 insert & Granite vector encoding |
