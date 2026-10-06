@@ -51,6 +51,12 @@ NoteFlow AI is an offline-first **second brain** for Android. It replaces cloud-
 | **Tier 3 (Budget / Low-RAM)**| 4 GB RAM, Helio G99, Snapdragon 680 | Gemma 4 E2B or Cloud Fallback | ~6–10 tokens/sec (CPU XNNPACK) | CPU fallback; user prompted to use Cloud APIs if device encounters memory pressure |
 | **Emulator** | Android Studio Emulator (x86_64, API 30+) | Gemma 4 E2B (Testing only) | ~5–8 tokens/sec | OpenCL unavailable; automatically switches to CPU XNNPACK |
 
+### ⚠️ Known Unsupported Configurations
+- **32-Bit CPU Architectures (`armeabi-v7a`, `x86`)**: Strictly unsupported. Google LiteRT-LM, ONNX Runtime, and 384-dim SIMD vector calculations mandate 64-bit platforms (`arm64-v8a` or `x86_64`).
+- **Legacy Android Versions (< Android 8.0 / API < 26)**: Unsupported due to modern Room 2.7, SQLCipher, and NDK C++17 runtime requirements.
+- **Ultra-Low RAM Devices (< 3.5 GB Physical RAM)**: Unsupported for local LLM inference. Android Low Memory Killer (LMK) will abort execution; users must use remote API providers (OpenAI/Gemini/Ollama) or plain notes.
+- **Custom / Stripped ROMs lacking `libOpenCL.so`**: GPU compute is disabled; app gracefully falls back to CPU XNNPACK.
+
 ---
 
 ## 🌟 Key Superpowers
@@ -193,6 +199,14 @@ For full setup instructions, common build errors, and keystore signing, read **[
 - **Release Versioning**: Releases follow Semantic Versioning (`vMAJOR.MINOR.PATCH`) cut from `main`.
 - **Sign-Off Protocol**: Production releases require sign-off from both the **Lead Architect** and **Release Engineer** after verifying all gates in **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)**.
 
+### 🚨 Infra & Access Escalation Path
+| Escalation Scope | Primary Contact / Team | Resolution Target |
+| :--- | :--- | :--- |
+| **CI/CD Pipeline & GitHub Actions Infra** | `@noteflowai/infra` | < 4 business hours |
+| **Model Hosting & CDN Download Links** | `@noteflowai/models` | < 8 business hours |
+| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer | Dual-authorization required |
+| **Security & Privacy Escalation** | [GitHub Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new) | < 24 hours acknowledgment |
+
 ---
 
 ## 🔒 Privacy & Zero-Telemetry Guarantee
@@ -210,3 +224,7 @@ For contribution guidelines and security protocols, refer to **[CONTRIBUTING.md]
 ## 📄 License
 
 Distributed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+---
+
+*Documentation & build state last verified on commit `90bf582` — October 6, 2026.*

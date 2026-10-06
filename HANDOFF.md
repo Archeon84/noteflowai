@@ -296,9 +296,16 @@ To ensure accountability and structured collaboration, operational responsibilit
 | **Build & Release Engineering** | Release Engineer | DevOps | Gradle build optimization, release signing, ProGuard mappings, CI/CD |
 | **Security & Privacy Compliance** | Security Officer | Core Architect | Zero-telemetry validation, SQLCipher encryption, secret sanitization |
 
-### Communication Channels:
+### Communication Channels & Escalation Path:
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
 - **Security Vulnerabilities**: File a private advisory directly via [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new) (please do not disclose security issues in public tickets).
+
+| Escalation Scope | Primary Contact / Team | Resolution Target |
+| :--- | :--- | :--- |
+| **CI/CD Pipeline & GitHub Actions Infra** | `@noteflowai/infra` | < 4 business hours |
+| **Model Hosting & CDN Download Links** | `@noteflowai/models` | < 8 business hours |
+| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer | Dual-authorization required |
+| **Security & Privacy Escalation** | [GitHub Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new) | < 24 hours acknowledgment |
 
 ### Branching, Merge & Release Approval Policy:
 - **Protected Trunk (`main`)**: Direct pushes to `main` are restricted. All contributions must arrive via Pull Requests.
@@ -315,6 +322,12 @@ To ensure accountability and structured collaboration, operational responsibilit
 | **Tier 2 (Mid-Range)** | 6 GB RAM, Snapdragon 778G+, Tensor G1, Exynos 2100+ | Gemma 4 E2B (~1.2 GB) | ~15–20 tokens/sec, TTFT < 900 ms | OpenCL GPU acceleration, `largeHeap` enabled |
 | **Tier 3 (Budget / Low-RAM)**| 4 GB RAM, Helio G99, Snapdragon 680 | Gemma 4 E2B or Cloud Fallback | ~6–10 tokens/sec (CPU XNNPACK) | CPU fallback; user prompted to use Cloud APIs if device encounters memory pressure |
 | **Emulator** | Android Studio Emulator (x86_64, API 30+) | Gemma 4 E2B (Testing only) | ~5–8 tokens/sec | OpenCL unavailable; automatically switches to CPU XNNPACK |
+
+### ⚠️ Known Unsupported Configurations
+- **32-Bit CPU Architectures (`armeabi-v7a`, `x86`)**: Strictly unsupported. Google LiteRT-LM, ONNX Runtime, and 384-dim SIMD vector calculations mandate 64-bit platforms (`arm64-v8a` or `x86_64`).
+- **Legacy Android Versions (< Android 8.0 / API < 26)**: Unsupported due to modern Room 2.7, SQLCipher, and NDK C++17 runtime requirements.
+- **Ultra-Low RAM Devices (< 3.5 GB Physical RAM)**: Unsupported for local LLM inference. Android Low Memory Killer (LMK) will abort execution; users must use remote API providers (OpenAI/Gemini/Ollama) or plain notes.
+- **Custom / Stripped ROMs lacking `libOpenCL.so`**: GPU compute is disabled; app gracefully falls back to CPU XNNPACK.
 
 ---
 
