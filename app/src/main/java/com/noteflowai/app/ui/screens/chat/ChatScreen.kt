@@ -86,6 +86,10 @@ fun ChatScreen(
     val aiProvider by viewModel.aiProvider.collectAsStateWithLifecycle()
     val isLocalOnlyMode by viewModel.isLocalOnlyMode.collectAsStateWithLifecycle()
     val isLocalActive = aiProvider.equals("Local", ignoreCase = true) || isLocalOnlyMode
+    val isLocalLoading by viewModel.isLlamaInferenceLoading.collectAsStateWithLifecycle()
+    val isLocalReady by viewModel.isLlamaInferenceReady.collectAsStateWithLifecycle()
+    val isLlamaDownloading by viewModel.isLlamaInferenceDownloading.collectAsStateWithLifecycle()
+    val isLocalBusy = isLocalActive && (isLocalLoading || isLlamaDownloading)
 
     val aiModelName by viewModel.aiModelName.collectAsStateWithLifecycle()
     val aiWebSearchEnabled by viewModel.aiWebSearchEnabled.collectAsStateWithLifecycle()
@@ -368,8 +372,17 @@ fun ChatScreen(
                     if (messages.isEmpty() && !isTyping) {
                         ChatEmptyHero(
                             onSuggestion = { suggestion ->
+                                if (isLocalBusy) {
+                                    Toast.makeText(context, context.getString(R.string.chat_local_model_loading_toast), Toast.LENGTH_SHORT).show()
+                                    return@ChatEmptyHero
+                                }
+                                if (isLocalActive && !isLocalReady) {
+                                    Toast.makeText(context, context.getString(R.string.chat_local_model_not_ready), Toast.LENGTH_LONG).show()
+                                    return@ChatEmptyHero
+                                }
                                 viewModel.sendChatMessage(suggestion, currentAttachmentUri, currentAttachmentType)
-                            }
+                            },
+                            enabled = !isLocalBusy && !isTyping
                         )
                     }
                     LazyColumn(
@@ -575,91 +588,131 @@ fun ChatScreen(
                         tonalElevation = 3.dp,
                         color = MaterialTheme.colorScheme.surface
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.sm),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            IconButton(onClick = { showAttachmentMenu = !showAttachmentMenu }, modifier = Modifier.padding(bottom = AppSpacing.xs)) {
-                                Icon(
-                                    imageVector = if (showAttachmentMenu) Icons.Default.Close else Icons.Default.Add,
-                                    contentDescription = stringResource(R.string.chat_desc_attach),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            OutlinedTextField(
-                                value = inputText,
-                                onValueChange = { inputText = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { 
-                                    Text(
-                                        when {
-                                            currentAttachmentUri != null -> stringResource(R.string.chat_placeholder_image)
-                                            chatRecallMode == ChatRecallMode.REMOTE_API_ONLY -> stringResource(R.string.chat_placeholder_remote_only)
-                                            else -> stringResource(R.string.chat_placeholder_notes_only)
-                                        }, 
-                                        style = MaterialTheme.typography.bodyMedium 
-                                    ) 
-                                },
-                                maxLines = 4,
-                                shape = RoundedCornerShape(AppRadius.medium),
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(AppSpacing.xs))
-                            if (aiWebSearchEnabled) {
-                                IconToggleButton(
-                                    checked = chatWebSearchActive,
-                                    onCheckedChange = { viewModel.toggleChatWebSearch() },
-                                    modifier = Modifier.padding(bottom = AppSpacing.xs),
-                                    enabled = !isWebSearching
+                        Column {
+                            AnimatedVisibility(visible = isLocalBusy) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = AppSpacing.md, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.chat_local_model_loading),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.sm),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                IconButton(onClick = { showAttachmentMenu = !showAttachmentMenu }, modifier = Modifier.padding(bottom = AppSpacing.xs)) {
                                     Icon(
-                                        Icons.Filled.Public,
-                                        contentDescription = stringResource(R.string.chat_web_search_label),
-                                        tint = if (chatWebSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        imageVector = if (showAttachmentMenu) Icons.Default.Close else Icons.Default.Add,
+                                        contentDescription = stringResource(R.string.chat_desc_attach),
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
-                            }
-                            IconToggleButton(
-                                checked = isThinkingMode,
-                                onCheckedChange = { viewModel.toggleThinkingMode(it) },
-                                modifier = Modifier.padding(bottom = AppSpacing.xs)
-                            ) {
-                                Icon(
-                                    Icons.Filled.Psychology,
-                                    contentDescription = stringResource(R.string.chat_think_label),
-                                    tint = if (isThinkingMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                            if (isTyping) {
-                                IconButton(
-                                    onClick = { viewModel.stopGeneration() },
-                                    modifier = Modifier.padding(bottom = AppSpacing.xs)
-                                ) {
-                                    Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_desc_stop),
-                                        tint = MaterialTheme.colorScheme.error)
-                                }
-                            } else {
-                                IconButton(
-                                    onClick = {
-                                        if (inputText.isNotBlank() || currentAttachmentUri != null) {
-                                            com.noteflowai.app.ui.theme.Haptics.confirm(context)
-                                            viewModel.sendChatMessage(inputText, currentAttachmentUri, currentAttachmentType)
-                                            inputText = ""
-                                            currentAttachmentUri = null
-                                            currentAttachmentType = null
-                                        }
+                                OutlinedTextField(
+                                    value = inputText,
+                                    onValueChange = { inputText = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { 
+                                        Text(
+                                            when {
+                                                currentAttachmentUri != null -> stringResource(R.string.chat_placeholder_image)
+                                                chatRecallMode == ChatRecallMode.REMOTE_API_ONLY -> stringResource(R.string.chat_placeholder_remote_only)
+                                                else -> stringResource(R.string.chat_placeholder_notes_only)
+                                            }, 
+                                            style = MaterialTheme.typography.bodyMedium 
+                                        ) 
                                     },
-                                    enabled = inputText.isNotBlank() || currentAttachmentUri != null,
+                                    maxLines = 4,
+                                    shape = RoundedCornerShape(AppRadius.medium),
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(AppSpacing.xs))
+                                if (aiWebSearchEnabled) {
+                                    IconToggleButton(
+                                        checked = chatWebSearchActive,
+                                        onCheckedChange = { viewModel.toggleChatWebSearch() },
+                                        modifier = Modifier.padding(bottom = AppSpacing.xs),
+                                        enabled = !isWebSearching
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Public,
+                                            contentDescription = stringResource(R.string.chat_web_search_label),
+                                            tint = if (chatWebSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                                IconToggleButton(
+                                    checked = isThinkingMode,
+                                    onCheckedChange = { viewModel.toggleThinkingMode(it) },
                                     modifier = Modifier.padding(bottom = AppSpacing.xs)
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_desc_send),
-                                        tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                    Icon(
+                                        Icons.Filled.Psychology,
+                                        contentDescription = stringResource(R.string.chat_think_label),
+                                        tint = if (isThinkingMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                                if (isTyping) {
+                                    IconButton(
+                                        onClick = { viewModel.stopGeneration() },
+                                        modifier = Modifier.padding(bottom = AppSpacing.xs)
+                                    ) {
+                                        Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_desc_stop),
+                                            tint = MaterialTheme.colorScheme.error)
+                                    }
+                                } else {
+                                    IconButton(
+                                        onClick = {
+                                            if (isLocalBusy) {
+                                                Toast.makeText(context, context.getString(R.string.chat_local_model_loading_toast), Toast.LENGTH_SHORT).show()
+                                                return@IconButton
+                                            }
+                                            if (isLocalActive && !isLocalReady) {
+                                                Toast.makeText(context, context.getString(R.string.chat_local_model_not_ready), Toast.LENGTH_LONG).show()
+                                                return@IconButton
+                                            }
+                                            if (inputText.isNotBlank() || currentAttachmentUri != null) {
+                                                com.noteflowai.app.ui.theme.Haptics.confirm(context)
+                                                viewModel.sendChatMessage(inputText, currentAttachmentUri, currentAttachmentType)
+                                                inputText = ""
+                                                currentAttachmentUri = null
+                                                currentAttachmentType = null
+                                            }
+                                        },
+                                        enabled = (inputText.isNotBlank() || currentAttachmentUri != null) && !isLocalBusy,
+                                        modifier = Modifier.padding(bottom = AppSpacing.xs)
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = stringResource(R.string.chat_desc_send),
+                                            tint = if ((inputText.isNotBlank() || currentAttachmentUri != null) && !isLocalBusy)
+                                                MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2381,7 +2434,10 @@ fun ChatLoadingBubble() {
 }
 
 @Composable
-private fun ChatEmptyHero(onSuggestion: (String) -> Unit) {
+private fun ChatEmptyHero(
+    onSuggestion: (String) -> Unit,
+    enabled: Boolean = true
+) {
     val isDark = !isLightBg(MaterialTheme.colorScheme.background)
     val gradient = if (isDark) AiGradientDark else AiGradientLight
     val accent = if (isDark) AiAccentDark else AiAccentLight
@@ -2428,9 +2484,10 @@ private fun ChatEmptyHero(onSuggestion: (String) -> Unit) {
         )
         suggestions.forEach { s ->
             Surface(
-                onClick = { onSuggestion(s) },
+                onClick = { if (enabled) onSuggestion(s) },
+                enabled = enabled,
                 shape = RoundedCornerShape(AppRadius.large),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = if (enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = 48.dp)

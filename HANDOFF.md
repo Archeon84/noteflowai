@@ -44,7 +44,8 @@ NoteFlow AI is built to give users an **autonomous, private second brain** opera
 | **Understand system design & ADRs** | 📖 **[HANDOFF.md](HANDOFF.md)** | Architecture diagrams, trade-off decisions, incident runbook & ownership |
 | **Contribute code or submit a PR** | 🛡️ **[CONTRIBUTING.md](CONTRIBUTING.md)** | PR requirements, code conventions, zero-telemetry rules & secret policies |
 | **Validate release candidate readiness** | ✅ **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)** | Automated gates, manual smoke tests & signing procedures |
-| **Debug or recover from bad states** | 🚨 **[Incident Runbook](#-known-bad-states--incident-recovery-playbook)** | Model corruption recovery, vector index reset, and OOM failover |
+| **Debug or recover from bad states** | 🚨 **[Incident Runbook](docs/INCIDENT_RUNBOOK.md)** | Model corruption recovery, vector index reset, and OOM failover playbooks |
+| **Inspect hardware tiers & benchmarks** | 📱 **[Hardware Matrix](docs/HARDWARE_MATRIX.md)** | Device classification, non-guarantee empirical baselines & constraints |
 | **Report a security vulnerability** | 🔒 **[Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new)** | Private vulnerability disclosure portal |
 
 ---
@@ -243,43 +244,15 @@ erDiagram
 
 ## 🚨 Known Bad States & Incident Recovery Playbook
 
-When maintaining or debugging NoteFlow AI in development or production, use this playbook for common failure modes:
+For step-by-step terminal commands and automated recovery scripts, see the dedicated **[docs/INCIDENT_RUNBOOK.md](docs/INCIDENT_RUNBOOK.md)**. Common failure modes are summarized below:
 
-### Playbook 1: Partial or Corrupted Model Downloads
-- **Symptom**: Model download hangs at 99%, or LiteRT throws `Model initialization failed: invalid header / truncated file`.
-- **Root Cause**: Network dropped midway or user backgrounded the app during non-atomic download finalization.
-- **Recovery Procedure**:
-  1. Open device terminal or adb:
-     ```bash
-     adb shell rm -rf /sdcard/Android/data/com.noteflowai.app/cache/models/temp_*
-     adb shell rm -f /sdcard/Android/data/com.noteflowai.app/files/models/*.litertlm
-     ```
-  2. In the app: Go to **Settings > AI Engine**, tap **Delete Model**, then re-tap **Download**.
-
-### Playbook 2: Vector or Segment Index Desynchronization
-- **Symptom**: RAG search yields 0 results even when relevant notes exist, or vector index throws `JsonSyntaxException`.
-- **Root Cause**: Force-close during an older uncommitted index write.
-- **Recovery Procedure**:
-  1. Trigger automated rebuild: In **Settings > Developer / Diagnostics**, tap **Rebuild Knowledge Graph & Vector Index**.
-  2. Or programmatically clear the index file:
-     ```bash
-     adb shell rm -f /data/data/com.noteflowai.app/files/embeddings/vector_index.json
-     ```
-  3. The `MemoryRebuildWorker` automatically detects missing indices and re-indexes all active notes from the encrypted database.
-
-### Playbook 3: Low-Memory Killer (LMK) Aborts on Devices with < 6GB RAM
-- **Symptom**: App suddenly vanishes during inference without an unhandled Java stacktrace; logcat shows `lmkd: kill com.noteflowai.app`.
-- **Root Cause**: Attempting to load the 2.4 GB Gemma 4 E4B model on a device with limited physical RAM.
-- **Recovery Procedure**:
-  1. Open app **Settings > AI Engine**.
-  2. Select **Gemma 4 E2B (~1.2 GB)** as the default model.
-  3. Ensure `android:largeHeap="true"` remains active in `AndroidManifest.xml`.
-
-### Playbook 4: Native JNI Audio / Whisper Crash
-- **Symptom**: Tapping the voice recording stop button triggers `SIGSEGV` or `whisper_full failed`.
-- **Root Cause**: Audio buffer captured at non-16kHz sample rate or zero-byte WAV header.
-- **Recovery Procedure**:
-  - Verify audio recorder configuration in `AudioRecordController.kt`: Audio format must be 16-bit PCM, 16,000 Hz, single channel (mono).
+| Incident / Bad State | Root Cause | Primary Recovery Action |
+| :--- | :--- | :--- |
+| **Model download hangs or invalid header** | Non-atomic write or dropped network | Delete partial models via `adb` or tap *Delete Model* in Settings > AI Engine. |
+| **Vector / Segment Index Desync** | Process termination during write | Trigger *Rebuild Knowledge Graph & Vector Index* in Settings > Diagnostics. |
+| **LMK aborts on < 6 GB RAM devices** | Gemma 4 E4B loaded on low RAM | Fallback to Gemma 4 E2B (~1.2 GB) or cloud API; confirm `largeHeap` is enabled. |
+| **Native JNI Audio / Whisper crash** | Non-16kHz audio buffer capture | Verify audio format in `AudioRecordController.kt` (16-bit PCM, 16kHz mono). |
+| **Database Decryption Failure** | Keystore desync / bad restore | Check Android Keystore alias or clear test state via `adb shell pm clear`. |
 
 ---
 
@@ -300,12 +273,14 @@ To ensure accountability and structured collaboration, operational responsibilit
 - **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/Archeon84/noteflowai/issues)
 - **Security Vulnerabilities**: File a private advisory directly via [GitHub Security Advisories](https://github.com/Archeon84/noteflowai/security/advisories/new) (please do not disclose security issues in public tickets).
 
-| Escalation Scope | Primary Contact / Team | Resolution Target |
+| Escalation Scope | Primary Contact / Role | Operational Target |
 | :--- | :--- | :--- |
-| **CI/CD Pipeline & GitHub Actions Infra** | `@noteflowai/infra` | < 4 business hours |
-| **Model Hosting & CDN Download Links** | `@noteflowai/models` | < 8 business hours |
-| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer | Dual-authorization required |
-| **Security & Privacy Escalation** | [GitHub Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new) | < 24 hours acknowledgment |
+| **CI/CD Pipeline & GitHub Actions Infra** | `@Archeon84` (Infra Lead / `@noteflowai/infra`*) | < 4 business hours |
+| **Model Hosting & CDN Download Links** | `@Archeon84` (Edge ML / `@noteflowai/models`*) | < 8 business hours |
+| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer (`@Archeon84`) | Dual-authorization required |
+| **Security & Privacy Escalation** | Security Officer | [GitHub Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new) |
+
+*\*Note: Handles formatted as `@noteflowai/*` are role-based placeholders for GitHub Organization teams. For direct repository operations, mention project maintainer `@Archeon84` or file a labeled GitHub Issue.*
 
 ### Branching, Merge & Release Approval Policy:
 - **Protected Trunk (`main`)**: Direct pushes to `main` are restricted. All contributions must arrive via Pull Requests.
@@ -316,7 +291,9 @@ To ensure accountability and structured collaboration, operational responsibilit
 
 ## 📱 Hardware & Device Tier Support Matrix
 
-| Tier | Target Devices / SoCs | Recommended Model | Expected Performance | Fallback / Behavior |
+> ⚠️ **Empirical Reference (Non-Guarantee)**: Tier performance estimates below represent empirical sample measurements under controlled room-temperature conditions on specific reference devices. They are diagnostic guidelines for developer testing rather than universal minimum performance guarantees or SLAs. Real-world performance varies by ambient thermals, background OS load, and vendor GPU drivers. See **[docs/HARDWARE_MATRIX.md](docs/HARDWARE_MATRIX.md)** for full benchmark details.
+
+| Tier | Target Devices / SoCs | Recommended Model | Observed Reference Performance (Non-Guarantee) | Fallback / Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | **Tier 1 (Flagship)** | 8 GB+ RAM, Snapdragon 8 Gen 1+, Tensor G2/G3/G4, Dimensity 9000+ | Gemma 4 E4B (~2.4 GB) or E2B (~1.2 GB) | ~20–25 tokens/sec, TTFT < 700 ms | Full OpenCL GPU acceleration |
 | **Tier 2 (Mid-Range)** | 6 GB RAM, Snapdragon 778G+, Tensor G1, Exynos 2100+ | Gemma 4 E2B (~1.2 GB) | ~15–20 tokens/sec, TTFT < 900 ms | OpenCL GPU acceleration, `largeHeap` enabled |
@@ -359,9 +336,9 @@ Before any release build is approved for distribution, all gates below must be v
 
 ## ⚡ Performance Baselines
 
-> **Empirical Context**: Metrics below represent empirical baseline measurements performed on a physical **Google Pixel 6a** (Google Tensor G1 SoC, 6 GB RAM, Android 14) under ambient room temperatures. Latencies and tokens/sec are representative reference figures and will naturally vary based on device SoC tier, background system load, thermal throttling, and available memory.
+> **Empirical Reference (Non-Guarantee)**: Metrics below reflect empirical baseline measurements performed on a single test device (**Google Pixel 6a**, Google Tensor G1 SoC, 6 GB RAM, Android 14) under ambient room temperatures. Latencies and tokens/sec are representative reference figures rather than universal performance guarantees, and will naturally vary based on device SoC tier, background system load, thermal throttling, and available memory. See **[docs/HARDWARE_MATRIX.md](docs/HARDWARE_MATRIX.md)** for full device tier analysis.
 
-| Operation | Typical Latency (Pixel 6a) | Notes |
+| Operation | Observed Latency (Pixel 6a Sample) | Notes |
 | :--- | :--- | :--- |
 | **First-Launch Model Download (E2B)** | ~6–8 min | 1.2 GB download over 100 Mbps Wi-Fi |
 | **Note Indexing (1,000 words)** | ~45–60 ms | Segmenting, FTS5 insert & Granite vector encoding |

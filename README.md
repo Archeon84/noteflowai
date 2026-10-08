@@ -19,7 +19,7 @@
 | :--- | :--- | :--- |
 | **CI/CD Pipeline Status** | [![Android CI](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/android.yml) [![Android Release CD](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml/badge.svg)](https://github.com/Archeon84/noteflowai/actions/workflows/release.yml) | Automated GitHub Actions CI & Release CD (`.github/workflows/`) |
 | **Local Test Baseline** | ✅ **Verified Green (0 failures)** | Verified: October 2026 on commit `ad17d2c` via `./gradlew testDebugUnitTest` |
-| **App Stability Stage** | 🟡 **Stable Core / Release-Candidate (v3.0.0)** | Feature-complete 2-stage RAG, local LiteRT-LM & memory graph. Device-tier tuning ongoing. |
+| **App Stability Stage** | 🟡 **Active Release Candidate (v3.0.0)** | Feature-complete 2-stage RAG, local LiteRT-LM & memory graph. Promotion to General Availability is strictly gated on passing CI build & unit tests and completing all verification gates in [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). |
 | **Supported OS** | **Android 8.0 to Android 15** (API 26–35) | Tested against Pixel 6a/7/8 (API 33–35) & Galaxy S21/S23 (API 31–34) |
 | **Hardware Architecture**| **ARM64 (`arm64-v8a`)** & **x86_64** | NDK native C++ libraries compiled for both ABIs |
 | **Model Distribution** | **Zero Bundled Weights** (~45 MB APK) | Models downloaded on-demand in-app to internal app storage |
@@ -38,14 +38,17 @@ NoteFlow AI is an offline-first **second brain** for Android. It replaces cloud-
 | **Understand system design & ADRs** | 📖 **[HANDOFF.md](HANDOFF.md)** | Architecture diagrams, trade-off decisions, incident runbook & ownership |
 | **Contribute code or submit a PR** | 🛡️ **[CONTRIBUTING.md](CONTRIBUTING.md)** | PR requirements, code conventions, zero-telemetry rules & secret policies |
 | **Validate release candidate readiness** | ✅ **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)** | Automated gates, manual smoke tests & signing procedures |
-| **Debug or recover from bad states** | 🚨 **[Incident Runbook](HANDOFF.md#-known-bad-states--incident-recovery-playbook)** | Model corruption recovery, vector index reset, and OOM failover |
+| **Debug or recover from bad states** | 🚨 **[Incident Runbook](docs/INCIDENT_RUNBOOK.md)** | Model corruption recovery, vector index reset, and OOM failover playbooks |
+| **Inspect hardware tiers & benchmarks** | 📱 **[Hardware Matrix](docs/HARDWARE_MATRIX.md)** | Device classification, non-guarantee empirical baselines & constraints |
 | **Report a security vulnerability** | 🔒 **[Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new)** | Private vulnerability disclosure portal |
 
 ---
 
 ## 📱 Hardware & Device Tier Support Matrix
 
-| Tier | Target Devices / SoCs | Recommended Model | Expected Performance | Fallback / Behavior |
+> ⚠️ **Empirical Reference (Non-Guarantee)**: Tier performance estimates below represent empirical sample measurements under controlled room-temperature conditions on specific reference devices. They are diagnostic guidelines for developer testing rather than universal minimum performance guarantees or SLAs. Real-world performance varies by ambient thermals, background OS load, and vendor GPU drivers. See **[docs/HARDWARE_MATRIX.md](docs/HARDWARE_MATRIX.md)** for full benchmark details.
+
+| Tier | Target Devices / SoCs | Recommended Model | Observed Reference Performance (Non-Guarantee) | Fallback / Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | **Tier 1 (Flagship)** | 8 GB+ RAM, Snapdragon 8 Gen 1+, Tensor G2/G3/G4, Dimensity 9000+ | Gemma 4 E4B (~2.4 GB) or E2B (~1.2 GB) | ~20–25 tokens/sec, TTFT < 700 ms | Full OpenCL GPU acceleration |
 | **Tier 2 (Mid-Range)** | 6 GB RAM, Snapdragon 778G+, Tensor G1, Exynos 2100+ | Gemma 4 E2B (~1.2 GB) | ~15–20 tokens/sec, TTFT < 900 ms | OpenCL GPU acceleration, `largeHeap` enabled |
@@ -152,9 +155,9 @@ NoteFlowAI/
 
 ## 📊 Representative Hardware Benchmarks (Google Pixel 6a)
 
-> **Empirical Context**: Metrics below represent empirical baseline measurements performed on a physical **Google Pixel 6a** (Google Tensor G1 SoC, 6 GB RAM, Android 14) under ambient room temperatures. Latencies and tokens/sec are representative reference figures and will naturally vary based on device SoC tier, background system load, thermal throttling, and available memory.
+> **Empirical Context (Non-Guarantee)**: Metrics below reflect single-device laboratory measurements conducted on a **Google Pixel 6a** (Google Tensor G1 SoC, 6 GB RAM, Android 14) under ambient room temperatures. They are intended as representative diagnostic reference figures rather than universal performance guarantees or minimum SLAs. Latencies naturally vary by device SoC tier, background system load, thermal throttling, and available memory. See **[docs/HARDWARE_MATRIX.md](docs/HARDWARE_MATRIX.md)** for full device analysis.
 
-| Operation | Metric (Pixel 6a) | Execution Environment / Notes |
+| Operation | Observed Metric (Pixel 6a Sample) | Execution Environment / Notes |
 | :--- | :--- | :--- |
 | **Note Indexing (1,000 words)** | ~45–60 ms | Segmenting, FTS5 insert & Granite vector encoding |
 | **Hybrid RAG Retrieval** | ~110–140 ms | Stage 1 candidate retrieval across 500+ notes |
@@ -201,12 +204,14 @@ For full setup instructions, common build errors, and keystore signing, read **[
 - **Sign-Off Protocol**: Production releases require sign-off from both the **Lead Architect** and **Release Engineer** after verifying all gates in **[RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)**.
 
 ### 🚨 Infra & Access Escalation Path
-| Escalation Scope | Primary Contact / Team | Resolution Target |
+| Escalation Scope | Primary Contact / Role | Resolution Target |
 | :--- | :--- | :--- |
-| **CI/CD Pipeline & GitHub Actions Infra** | `@noteflowai/infra` | < 4 business hours |
-| **Model Hosting & CDN Download Links** | `@noteflowai/models` | < 8 business hours |
-| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer | Dual-authorization required |
+| **CI/CD Pipeline & GitHub Actions Infra** | `@Archeon84` (Infra Lead / `@noteflowai/infra`*) | < 4 business hours |
+| **Model Hosting & CDN Download Links** | `@Archeon84` (Edge ML / `@noteflowai/models`*) | < 8 business hours |
+| **Release Signing Key / Keystore Access** | Tech Lead & Release Engineer (`@Archeon84`) | Dual-authorization required |
 | **Security & Privacy Escalation** | [GitHub Security Advisory](https://github.com/Archeon84/noteflowai/security/advisories/new) | < 24 hours acknowledgment |
+
+*\*Note: Handles formatted as `@noteflowai/*` are role-based placeholders for GitHub Organization teams. For direct repository operations, mention project maintainer `@Archeon84` or file a labeled GitHub Issue.*
 
 ---
 

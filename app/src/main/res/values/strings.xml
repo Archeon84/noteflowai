@@ -292,6 +292,9 @@
     <string name="chat_provider_cloud">Cloud AI</string>
     <string name="chat_switched_to_cloud">Switched to Cloud AI (%1$s)</string>
     <string name="chat_switched_to_local">Switched to Local AI (%1$s)</string>
+    <string name="chat_local_model_loading">Local AI model is loading…</string>
+    <string name="chat_local_model_loading_toast">Local AI model is still loading. Please wait a moment.</string>
+    <string name="chat_local_model_not_ready">On-Device local model is not downloaded or ready. Please check Settings &gt; AI &amp; Intelligence.</string>
     <string name="chat_recall_mode_notes_only">Talk to Notes</string>
     <string name="chat_recall_mode_remote_only">Talk with AI Assistant</string>
     <string name="chat_placeholder_notes_only">Ask anything about your notes…</string>

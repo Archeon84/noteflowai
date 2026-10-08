@@ -25,11 +25,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
 import java.util.LinkedHashMap
@@ -56,6 +58,7 @@ class LiteRtInferenceManager(private val context: Context) {
     private val modelsDir = File(context.filesDir, MODEL_DIR).also { it.mkdirs() }
     private val settingsManager = SettingsManager.getInstance(context)
     private val mutex = Mutex()
+    private val loadMutex = Mutex()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -129,80 +132,103 @@ class LiteRtInferenceManager(private val context: Context) {
         return if (file.exists() && file.length() > 1_000_000) file.absolutePath else null
     }
 
+    /**
+     * Wait for model loading to finish with a timeout.
+     * Returns true if the model is ready, false if timed out or failed.
+     */
+    suspend fun awaitReady(timeoutMs: Long = 30_000L): Boolean {
+        if (!_isLoading.value) return _isModelReady.value
+        return try {
+            withTimeoutOrNull(timeoutMs) {
+                _isLoading.first { !it }
+                _isModelReady.value
+            } ?: false
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     suspend fun loadModel(
         modelId: ModelId = ModelId.fromId(settingsManager.localLlmModelIdBlocking)
-    ): Boolean = withContext(Dispatchers.IO) {
-        val path = getModelPath(modelId)
-        if (path == null) {
-            Log.e(TAG, "Model file not found for ${modelId.id}")
-            return@withContext false
-        }
-
-        if (currentlyLoadedModelId == modelId.id && engine?.isInitialized() == true) {
-            return@withContext true
-        }
-
-        _isLoading.value = true
-        try {
-            freeInternal()
-
-            var candidateEngine: Engine? = null
-            var initializedBackend = "None"
-
-            // Stage 1: Try GPU / NPU hardware acceleration (if not disabled by previous runtime error)
-            if (!gpuDisabledByRuntimeError) {
-                try {
-                    Log.i(TAG, "Attempting LiteRT-LM GPU backend initialization: $path")
-                    val gpuConfig = EngineConfig(
-                        modelPath = path,
-                        backend = Backend.GPU(),
-                        maxNumTokens = MAX_NUM_TOKENS
-                    )
-                    val testEngine = Engine(gpuConfig)
-                    testEngine.initialize()
-                    candidateEngine = testEngine
-                    initializedBackend = "GPU (Accelerated)"
-                    Log.i(TAG, "LiteRT-LM GPU backend initialized successfully")
-                } catch (gpuError: Throwable) {
-                    Log.w(
-                        TAG,
-                        "GPU backend initialization failed (${gpuError.message}). Initiating fallback to CPU (XNNPACK)..."
-                    )
-                }
+    ): Boolean = loadMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val path = getModelPath(modelId)
+            if (path == null) {
+                Log.e(TAG, "Model file not found for ${modelId.id}")
+                return@withContext false
             }
 
-            // Stage 2: Fallback to universal CPU (XNNPACK)
-            if (candidateEngine == null) {
-                try {
-                    Log.i(TAG, "Attempting LiteRT-LM CPU backend initialization: $path")
-                    val cpuConfig = EngineConfig(
-                        modelPath = path,
-                        backend = Backend.CPU(),
-                        maxNumTokens = MAX_NUM_TOKENS
-                    )
-                    val testEngine = Engine(cpuConfig)
-                    testEngine.initialize()
-                    candidateEngine = testEngine
-                    initializedBackend = "CPU (XNNPACK)"
-                    Log.i(TAG, "LiteRT-LM CPU backend initialized successfully")
-                } catch (cpuError: Throwable) {
-                    Log.e(TAG, "LiteRT-LM CPU backend initialization failed: ${cpuError.message}", cpuError)
-                    _activeBackend.value = "Failed"
-                    return@withContext false
-                }
+            if (currentlyLoadedModelId == modelId.id && engine?.isInitialized() == true) {
+                return@withContext true
             }
 
-            engine = candidateEngine
-            _activeBackend.value = initializedBackend
-            currentlyLoadedModelId = modelId.id
-            _isModelReady.value = true
-            Log.i(TAG, "LiteRT-LM loaded model ${modelId.id} with backend $initializedBackend")
-            true
-        } catch (e: Throwable) {
-            Log.e(TAG, "Unexpected error loading model: ${e.message}", e)
-            false
-        } finally {
-            _isLoading.value = false
+            _isLoading.value = true
+            try {
+                freeInternal()
+
+                var candidateEngine: Engine? = null
+                var initializedBackend = "None"
+
+                // Stage 1: Try GPU / NPU hardware acceleration (if not disabled by previous runtime error)
+                if (!gpuDisabledByRuntimeError) {
+                    var gpuEngine: Engine? = null
+                    try {
+                        Log.i(TAG, "Attempting LiteRT-LM GPU backend initialization: $path")
+                        val gpuConfig = EngineConfig(
+                            modelPath = path,
+                            backend = Backend.GPU(),
+                            maxNumTokens = MAX_NUM_TOKENS
+                        )
+                        gpuEngine = Engine(gpuConfig)
+                        gpuEngine.initialize()
+                        candidateEngine = gpuEngine
+                        initializedBackend = "GPU (Accelerated)"
+                        Log.i(TAG, "LiteRT-LM GPU backend initialized successfully")
+                    } catch (gpuError: Throwable) {
+                        try { gpuEngine?.close() } catch (_: Throwable) {}
+                        gpuDisabledByRuntimeError = true
+                        Log.w(
+                            TAG,
+                            "GPU backend initialization failed (${gpuError.message}). Initiating fallback to CPU (XNNPACK)..."
+                        )
+                    }
+                }
+
+                // Stage 2: Fallback to universal CPU (XNNPACK)
+                if (candidateEngine == null) {
+                    var cpuEngine: Engine? = null
+                    try {
+                        Log.i(TAG, "Attempting LiteRT-LM CPU backend initialization: $path")
+                        val cpuConfig = EngineConfig(
+                            modelPath = path,
+                            backend = Backend.CPU(),
+                            maxNumTokens = MAX_NUM_TOKENS
+                        )
+                        cpuEngine = Engine(cpuConfig)
+                        cpuEngine.initialize()
+                        candidateEngine = cpuEngine
+                        initializedBackend = "CPU (XNNPACK)"
+                        Log.i(TAG, "LiteRT-LM CPU backend initialized successfully")
+                    } catch (cpuError: Throwable) {
+                        try { cpuEngine?.close() } catch (_: Throwable) {}
+                        Log.e(TAG, "LiteRT-LM CPU backend initialization failed: ${cpuError.message}", cpuError)
+                        _activeBackend.value = "Failed"
+                        return@withContext false
+                    }
+                }
+
+                engine = candidateEngine
+                _activeBackend.value = initializedBackend
+                currentlyLoadedModelId = modelId.id
+                _isModelReady.value = true
+                Log.i(TAG, "LiteRT-LM loaded model ${modelId.id} with backend $initializedBackend")
+                true
+            } catch (e: Throwable) {
+                Log.e(TAG, "Unexpected error loading model: ${e.message}", e)
+                false
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -487,7 +513,7 @@ class LiteRtInferenceManager(private val context: Context) {
         } catch (_: Throwable) {}
         engine = null
         _activeBackend.value = "None"
-        _isModelReady.value = false
+        _isModelReady.value = isModelDownloaded(ModelId.fromId(settingsManager.localLlmModelIdBlocking))
     }
 
     private fun computeCacheKey(

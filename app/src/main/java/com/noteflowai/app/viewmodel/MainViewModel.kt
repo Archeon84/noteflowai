@@ -3269,6 +3269,10 @@ Rules:
 
     // AI Chat
     fun sendChatMessage(text: String, attachmentUri: String? = null, attachmentType: String? = null) {
+        if (_isAiTyping.value) {
+            Log.w("MainViewModel", "sendChatMessage: ignored because AI is currently typing")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var base64Image: String? = null
@@ -3396,6 +3400,32 @@ Rules:
                                 val isLocalEngine = cfgProvider.equals("Local", ignoreCase = true) || isLocalOnlyMode.value
                                 if (isLocalEngine) {
                                     Log.d("MainViewModel", "chatJob: generating response via local LiteRtInferenceManager (attempt $attempt)...")
+                                    // Guard: If model is currently loading into memory, wait for it to complete
+                                    if (liteRtInferenceManager.isLoading.value) {
+                                        Log.i("MainViewModel", "chatJob: Local AI model is currently loading; waiting for model...")
+                                        withContext(Dispatchers.Main) {
+                                            _longTaskStatus.value = "Initializing on-device AI model..."
+                                        }
+                                        val ready = liteRtInferenceManager.awaitReady(timeoutMs = 25_000L)
+                                        withContext(Dispatchers.Main) {
+                                            _longTaskStatus.value = null
+                                        }
+                                        if (!ready && !liteRtInferenceManager.isModelReady.value) {
+                                            finalResponse = getApplication<Application>().getString(R.string.chat_local_model_loading_toast)
+                                            withContext(Dispatchers.Main) {
+                                                _streamingContent.value = null
+                                                _chatMessages.value = updatedMessages + ChatMessage(role = "assistant", content = finalResponse)
+                                                saveCurrentChat(_chatMessages.value)
+                                            }
+                                            return@chatBlock
+                                        }
+                                    }
+
+                                    // Refresh status in case startup check is concluding
+                                    if (!liteRtInferenceManager.isModelReady.value) {
+                                        liteRtInferenceManager.refreshDownloadedModels()
+                                    }
+
                                     if (liteRtInferenceManager.isModelReady.value) {
                                         val localGenStartMs = android.os.SystemClock.elapsedRealtime()
                                         // Long-note injection already fills the prompt: trim
@@ -3484,10 +3514,13 @@ Rules:
                                         }
                                     } else {
                                         _longTaskStatus.value = null
-                                        finalResponse = "On-Device local model is not downloaded. Please download it in Settings > AI & Intelligence to use offline RAG."
+                                        finalResponse = getApplication<Application>().getString(R.string.chat_local_model_not_ready)
                                         withContext(Dispatchers.Main) {
-                                            _streamingContent.value = finalResponse
+                                            _streamingContent.value = null
+                                            _chatMessages.value = updatedMessages + ChatMessage(role = "assistant", content = finalResponse)
+                                            saveCurrentChat(_chatMessages.value)
                                         }
+                                        return@chatBlock
                                     }
                                 } else {
                                     Log.d("MainViewModel", "chatJob: streaming response (attempt $attempt)...")
@@ -3833,12 +3866,13 @@ Rules:
                                 saveCurrentChat(_chatMessages.value)
                             }
                             throw e
-                        } catch (e: Exception) {
-                            Log.e("MainViewModel", "chatJob: Exception: ${e.javaClass.simpleName}: ${e.message}", e)
+                        } catch (t: Throwable) {
+                            Log.e("MainViewModel", "chatJob: Throwable: ${t.javaClass.simpleName}: ${t.message}", t)
                             withContext(Dispatchers.Main) {
                                 _streamingContent.value = null
                                 _chatMessages.value =
-                                    updatedMessages + ChatMessage(role = "assistant", content = "Error: ${e.message}")
+                                    updatedMessages + ChatMessage(role = "assistant", content = "Error: ${t.message ?: "An unexpected error occurred during processing."}")
+                                saveCurrentChat(_chatMessages.value)
                             }
                         } finally {
                             chatJob = null
@@ -3846,8 +3880,9 @@ Rules:
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("MainViewModel", "sendChatMessage outer error: ${e.javaClass.simpleName}: ${e.message}", e)
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                Log.e("MainViewModel", "sendChatMessage outer error: ${t.javaClass.simpleName}: ${t.message}", t)
                 withContext(Dispatchers.Main) {
                     _isAiTyping.value = false
                     _streamingContent.value = null
