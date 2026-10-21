@@ -249,6 +249,17 @@ fun RecordScreen(viewModel: MainViewModel, lazyListState: androidx.compose.found
                 remember { mutableStateOf(1f) }
             }
             val recordHaptic = LocalHapticFeedback.current
+            val micPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                if (granted) {
+                    viewModel.startRecording()
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Microphone permission is required to record audio.")
+                    }
+                }
+            }
             // Gradient accent behind recording button
             Box(
                 modifier = Modifier
@@ -281,7 +292,15 @@ fun RecordScreen(viewModel: MainViewModel, lazyListState: androidx.compose.found
                     ) {
                         if (!isRecording) {
                             recordHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.startRecording()
+                            val hasMicPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.RECORD_AUDIO
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            if (hasMicPermission) {
+                                viewModel.startRecording()
+                            } else {
+                                micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
                         } else {
                             recordHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.stopRecording()

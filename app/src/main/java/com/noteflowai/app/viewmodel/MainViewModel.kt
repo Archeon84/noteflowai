@@ -123,8 +123,8 @@ data class MemoryRebuildState(
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val noteRepository = NoteRepository(application)
-    private val recordingRepository = RecordingRepository(application)
+    private val noteRepository = NoteRepository.getInstance(application)
+    private val recordingRepository = RecordingRepository.getInstance(application)
     private val whisperBridge = WhisperBridge()
     private val whisperNpuEngine = WhisperNpuEngine(application)
 
@@ -135,7 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsManager = SettingsManager.getInstance(application)
     private val aiChatRepository = AiChatRepository()
     private val webSearchRepository = WebSearchRepository()
-    private val chatRepository = ChatRepository(application)
+    private val chatRepository = ChatRepository.getInstance(application)
     private val deepgramRepository = DeepgramRepository()
     private val onDeviceAiManager = OnDeviceAiManager(application)
     val liteRtInferenceManager = com.noteflowai.app.data.LiteRtInferenceManager(application)
@@ -975,6 +975,7 @@ Rules:
     val downloadingLocalModelId: StateFlow<String?> = liteRtInferenceManager.downloadingModelId
     val downloadedLocalModels: StateFlow<Set<String>> = liteRtInferenceManager.downloadedModels
     val activeLiteRtBackend: StateFlow<String> = liteRtInferenceManager.activeBackend
+    val defaultLocalLlmModelId: String = settingsManager.defaultLocalLlmModelId
     val activeLocalLlmModelId: Flow<String> = settingsManager.localLlmModelId
 
     val isNllbModelReady: StateFlow<Boolean> = nllbManager.isDownloaded
@@ -1821,12 +1822,22 @@ Rules:
         _recordingSeconds.value = 0
         recordingStartedOnline = isOnlineMode.value
 
+        if (isOnlineMode.value && deepgramApiKey.value.isBlank()) {
+            _errorMessage.value = "Deepgram API key not set. Go to Settings to add it."
+            return
+        }
+
         timerJob = viewModelScope.launch {
-            val startMillis = System.currentTimeMillis()
+            var activeMillis = 0L
+            var lastTick = System.currentTimeMillis()
             while (isActive) {
                 kotlinx.coroutines.delay(500)
-                val elapsed = ((System.currentTimeMillis() - startMillis) / 1000).toInt()
-                _recordingSeconds.value = if (_isPaused.value) _recordingSeconds.value else elapsed
+                val now = System.currentTimeMillis()
+                if (!_isPaused.value) {
+                    activeMillis += (now - lastTick)
+                    _recordingSeconds.value = (activeMillis / 1000).toInt()
+                }
+                lastTick = now
             }
         }
 
@@ -1841,10 +1852,6 @@ Rules:
             val lang = transcriptionLanguage.value
             val dgLang = if (lang == "Auto") "multi" else toDeepgramCode(lang)
             val apiKey = deepgramApiKey.value
-            if (apiKey.isBlank()) {
-                _errorMessage.value = "Deepgram API key not set. Go to Settings to add it."
-                return
-            }
             deepgramRepository.startRealTime(apiKey, dgLang)
         }
 
@@ -5256,7 +5263,15 @@ Rules:
     }
 
     override fun onCleared() {
-        super.onCleared()
+        val managerToRelease = ttsManager
+        ttsManager = null
+        val messagesToSave = _chatMessages.value
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { managerToRelease?.release() }
+            if (messagesToSave.isNotEmpty()) {
+                runCatching { saveCurrentChat(messagesToSave) }
+            }
+        }
         recordingJob?.cancel()
         transcriptionJob?.cancel()
         timerJob?.cancel()
@@ -5268,16 +5283,8 @@ Rules:
         liteRtInferenceManager.free()
         nllbManager.unloadModels()
         stopPlayback()
-        ttsManager?.let { manager ->
-            viewModelScope.launch { manager.release() }
-        }
-        ttsManager = null
         transcriptionExecutor.shutdownNow()
-        viewModelScope.launch {
-            if (_chatMessages.value.isNotEmpty()) {
-                saveCurrentChat(_chatMessages.value)
-            }
-        }
+        super.onCleared()
     }
 
     private fun toWhisperCode(lang: String): String = when (lang) {
@@ -5733,10 +5740,12 @@ CRITICAL INSTRUCTIONS:
         val lines = note.content.lines().toMutableList()
         if (lineNumber !in lines.indices) return
         val line = lines[lineNumber]
-        lines[lineNumber] = line
-            .replaceFirst("- [x]", "- [ ]")
-            .replaceFirst("- [X]", "- [ ]")
-            .replaceFirst("- [ ]", "- [x]")
+        lines[lineNumber] = when {
+            line.contains("- [x]") -> line.replaceFirst("- [x]", "- [ ]")
+            line.contains("- [X]") -> line.replaceFirst("- [X]", "- [ ]")
+            line.contains("- [ ]") -> line.replaceFirst("- [ ]", "- [x]")
+            else -> line
+        }
         val newContent = lines.joinToString("\n")
         // Optimistic: apply to UI immediately
         val oldContent = note.content

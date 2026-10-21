@@ -21,12 +21,14 @@ data class NoteFile(
  * Gson uses Unsafe to allocate instances, bypassing constructors, so fields
  * without JSON values arrive as null even though Kotlin declares them non-null.
  */
+@Suppress("USELESS_ELVIS")
 fun NoteFile.sanitized() = copy(
     fileName = fileName ?: "",
     lastModified = lastModified ?: "",
     preview = preview ?: "",
     content = content ?: "",
     category = category ?: "Uncategorized",
+    tags = (tags as List<String>?)?.filterNotNull() ?: emptyList(),
     createdAt = createdAt ?: "",
 )
 

@@ -30,25 +30,26 @@ class DocxImporter(private val context: Context) : ContentImporter {
             ?: return@withContext ImportResult.Failure(ImportError.MalformedContent, "Cannot open DOCX stream")
 
         try {
-            val doc = XWPFDocument(stream)
-            val sb = StringBuilder()
-            doc.paragraphs?.forEach { p ->
-                val text = p.text
-                if (!text.isNullOrBlank()) {
-                    sb.append(text).append("\n\n")
-                }
-            }
-            doc.tables?.forEach { table ->
-                table.rows?.forEach { row ->
-                    val rowText = row.tableCells?.joinToString(" | ") { it.text.trim() }
-                    if (!rowText.isNullOrBlank()) {
-                        sb.append(rowText).append("\n")
+            val text = stream.use { s ->
+                XWPFDocument(s).use { doc ->
+                    val sb = StringBuilder()
+                    doc.paragraphs?.forEach { p ->
+                        val pText = p.text
+                        if (!pText.isNullOrBlank()) {
+                            sb.append(pText).append("\n\n")
+                        }
                     }
+                    doc.tables?.forEach { table ->
+                        table.rows?.forEach { row ->
+                            val rowText = row.tableCells?.joinToString(" | ") { it.text.trim() }
+                            if (!rowText.isNullOrBlank()) {
+                                sb.append(rowText).append("\n")
+                            }
+                        }
+                    }
+                    sb.toString().trim()
                 }
             }
-            doc.close()
-
-            val text = sb.toString().trim()
             if (text.isBlank()) {
                 return@withContext ImportResult.Failure(
                     error = ImportError.EmptyContent,

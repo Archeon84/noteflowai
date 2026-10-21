@@ -32,7 +32,7 @@ class YouTubeViewModel(application: Application) : AndroidViewModel(application)
     private val repository = YouTubeRepository()
     private val aiChatRepository = AiChatRepository()
     private val settingsManager = SettingsManager.getInstance(application)
-    private val noteRepository = NoteRepository(application)
+    private val noteRepository = NoteRepository.getInstance(application)
     private val sourceSegmentManager by lazy { SourceSegmentManager.getInstance(application) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -137,8 +137,11 @@ class YouTubeViewModel(application: Application) : AndroidViewModel(application)
                 val apiKey = settingsManager.aiApiKey.first()
                 val model = settingsManager.aiModelName.first()
                 val provider = settingsManager.aiProvider.first()
+                val needsApiKey = !provider.equals("Ollama", ignoreCase = true) &&
+                    !provider.equals("LM Studio", ignoreCase = true) &&
+                    !provider.equals("Local", ignoreCase = true)
 
-                if (baseUrl.isBlank() || apiKey.isBlank()) {
+                if (baseUrl.isBlank() || (needsApiKey && apiKey.isBlank())) {
                     _uiState.value = _uiState.value.copy(
                         isSummarizing = false,
                         summaryError = "AI not configured. Set API key in Settings."
@@ -203,6 +206,12 @@ Keep the summary clear and well-structured."""
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = "", summaryError = "")
+    }
+
+    override fun onCleared() {
+        fetchJob?.cancel()
+        summarizeJob?.cancel()
+        super.onCleared()
     }
 }
 

@@ -30,9 +30,14 @@ class ImageOcrImporter(private val context: Context) : ContentImporter {
             } ?: return@withContext ImportResult.Failure(ImportError.MalformedContent, "Cannot decode image file")
 
             val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-            val image = InputImage.fromBitmap(bitmap, 0)
-            val visionText = recognizer.process(image).await()
-            val text = visionText.text.trim()
+            val text = try {
+                val image = InputImage.fromBitmap(bitmap, 0)
+                val visionText = recognizer.process(image).await()
+                visionText.text.trim()
+            } finally {
+                runCatching { recognizer.close() }
+                runCatching { bitmap.recycle() }
+            }
 
             if (text.isBlank()) {
                 return@withContext ImportResult.Failure(

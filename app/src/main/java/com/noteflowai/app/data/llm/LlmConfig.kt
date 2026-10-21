@@ -10,10 +10,19 @@ data class LlmConfig(
     companion object {
         fun forModel(modelId: ModelId): LlmConfig = LlmConfig(
             modelId = modelId,
-            contextSize = 4096,
-            ragMaxContextTokens = 2000,
+            contextSize = when (modelId) {
+                ModelId.Qwen25_05B -> 2048 // Extra compact context for low-RAM devices (~60MB KV-cache)
+                else -> 4096
+            },
+            ragMaxContextTokens = when (modelId) {
+                ModelId.Qwen25_05B -> 1200
+                else -> 2000
+            },
             nThreads = 4,
-            maxNewTokens = 1280,
+            maxNewTokens = when (modelId) {
+                ModelId.Qwen25_05B -> 1024
+                else -> 1280
+            },
         )
     }
 }

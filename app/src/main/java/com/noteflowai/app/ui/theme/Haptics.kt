@@ -14,17 +14,32 @@ object Haptics {
 
     /** Light tap — toggle, selection, chip press */
     fun tap(context: Context) {
-        perform(context, VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+        val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+        } else {
+            VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+        perform(context, effect)
     }
 
     /** Medium confirmation — save, send, complete action */
     fun confirm(context: Context) {
-        perform(context, VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
+        val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+        } else {
+            VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+        perform(context, effect)
     }
 
     /** Subtle tick — slider change, carousel snap */
     fun tick(context: Context) {
-        perform(context, VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
+        val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+        } else {
+            VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE)
+        }
+        perform(context, effect)
     }
 
     /** Warning / destructive action — delete, error */

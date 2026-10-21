@@ -32,7 +32,9 @@ class RecordingRepository(private val context: Context) {
     }
 
     private fun isWithinDirectory(file: File, dir: File): Boolean {
-        return file.canonicalPath.startsWith(dir.canonicalPath)
+        val dirPath = dir.canonicalPath
+        val filePath = file.canonicalPath
+        return filePath == dirPath || filePath.startsWith(dirPath + File.separator)
     }
 
     private val _recordingsFlow = MutableStateFlow<List<AudioRecording>>(emptyList())
@@ -61,45 +63,55 @@ class RecordingRepository(private val context: Context) {
 
     private fun calculateWavDuration(file: File): Int {
         // Try MediaExtractor first (most reliable)
+        val extractor = android.media.MediaExtractor()
         try {
-            val extractor = android.media.MediaExtractor()
             extractor.setDataSource(file.absolutePath)
             if (extractor.trackCount > 0) {
-                val durationUs = extractor.getTrackFormat(0).getLong(android.media.MediaFormat.KEY_DURATION)
-                extractor.release()
-                if (durationUs > 0) return (durationUs / 1_000_000).toInt()
-            }
-            extractor.release()
-        } catch (_: Exception) {}
-
-        // Fallback: parse WAV header manually
-        return try {
-            if (file.length() < 44) return 0
-            val raf = java.io.RandomAccessFile(file, "r")
-            raf.seek(12)
-            var byteRate = 0
-            var dataSize = 0
-            var foundData = false
-            val headerBuf = ByteArray(4)
-            while (raf.filePointer + 8 <= raf.length()) {
-                raf.readFully(headerBuf)
-                val chunkId = String(headerBuf)
-                val chunkSize = raf.readInt()
-                if (chunkId == "fmt ") {
-                    val fmtBuf = ByteArray(16)
-                    raf.readFully(fmtBuf)
-                    byteRate = java.nio.ByteBuffer.wrap(fmtBuf, 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
-                    if (chunkSize > 16) raf.seek(raf.filePointer + (chunkSize - 16))
-                } else if (chunkId == "data") {
-                    dataSize = chunkSize
-                    foundData = true
-                    break
-                } else {
-                    raf.seek(raf.filePointer + chunkSize)
+                val format = extractor.getTrackFormat(0)
+                if (format.containsKey(android.media.MediaFormat.KEY_DURATION)) {
+                    val durationUs = format.getLong(android.media.MediaFormat.KEY_DURATION)
+                    if (durationUs > 0) return (durationUs / 1_000_000).toInt()
                 }
             }
-            raf.close()
-            if (foundData && byteRate > 0) (dataSize.toDouble() / byteRate).toInt() else 0
+        } catch (_: Exception) {
+        } finally {
+            runCatching { extractor.release() }
+        }
+
+        // Fallback: parse WAV header manually (RIFF/WAV chunk sizes are Little-Endian)
+        return try {
+            if (file.length() < 44) return 0
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                raf.seek(12)
+                var byteRate = 0
+                var dataSize = 0L
+                var foundData = false
+                val headerBuf = ByteArray(4)
+                while (raf.filePointer + 8 <= raf.length()) {
+                    raf.readFully(headerBuf)
+                    val chunkId = String(headerBuf, Charsets.US_ASCII)
+                    val chunkSize = Integer.reverseBytes(raf.readInt()).toLong() and 0xFFFFFFFFL
+                    if (chunkId == "fmt ") {
+                        if (chunkSize >= 16) {
+                            val fmtBuf = ByteArray(16)
+                            raf.readFully(fmtBuf)
+                            byteRate = java.nio.ByteBuffer.wrap(fmtBuf, 8, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+                            if (chunkSize > 16) raf.seek(raf.filePointer + (chunkSize - 16))
+                        } else {
+                            raf.seek(raf.filePointer + chunkSize)
+                        }
+                    } else if (chunkId == "data") {
+                        val remaining = (raf.length() - raf.filePointer).coerceAtLeast(0L)
+                        dataSize = minOf(chunkSize, remaining)
+                        foundData = true
+                        break
+                    } else {
+                        val skip = if (chunkSize % 2L == 1L) chunkSize + 1L else chunkSize
+                        raf.seek(raf.filePointer + skip)
+                    }
+                }
+                if (foundData && byteRate > 0) (dataSize.toDouble() / byteRate).toInt() else 0
+            }
         } catch (e: Exception) {
             0
         }
@@ -168,43 +180,57 @@ class RecordingRepository(private val context: Context) {
 
     suspend fun deleteRecording(fileName: String) {
         withContext(Dispatchers.IO) {
-            val file = File(recordingsDir, sanitizeFileName(fileName))
+            val safeName = sanitizeFileName(fileName)
+            val file = File(recordingsDir, safeName)
             if (!isWithinDirectory(file, recordingsDir)) return@withContext
             file.delete()
-            removeRecordingFromList(fileName)
+            removeRecordingFromList(safeName)
 
             // Personal Memory Layer: cascade delete source segments (non-blocking, behind feature flag)
-            sourceSegmentManager.onSourceDeleted(fileName)
+            sourceSegmentManager.onSourceDeleted(safeName)
 
             // Phase 1: cancel any pending processing job and drop the raw capture row.
-            CaptureJobScheduler.cancel(context, fileName)
+            CaptureJobScheduler.cancel(context, safeName)
             scope.launch {
-                runCatching { RawCaptureRepository.getInstance(context).deleteBySourceId(fileName) }
+                runCatching { RawCaptureRepository.getInstance(context).deleteBySourceId(safeName) }
             }
         }
     }
 
     suspend fun renameRecording(oldName: String, newName: String) {
         withContext(Dispatchers.IO) {
+            val safeOldName = sanitizeFileName(oldName)
             val cleanNewName = if (newName.endsWith(".wav")) sanitizeFileName(newName) else "${sanitizeFileName(newName)}.wav"
-            val oldFile = File(recordingsDir, sanitizeFileName(oldName))
+            val oldFile = File(recordingsDir, safeOldName)
             val newFile = File(recordingsDir, cleanNewName)
             if (!isWithinDirectory(oldFile, recordingsDir) || !isWithinDirectory(newFile, recordingsDir)) return@withContext
 
             if (oldFile.exists() && !newFile.exists()) {
-                oldFile.renameTo(newFile)
-                // Remove old, add updated
-                removeRecordingFromList(oldName)
-                val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
-                val epoch = newFile.lastModified()
-                addRecordingToList(AudioRecording(
-                    fileName = newFile.name,
-                    filePath = newFile.absolutePath,
-                    lastModified = dateFormat.format(Date(epoch)),
-                    fileSize = newFile.length(),
-                    durationSeconds = calculateWavDuration(newFile),
-                    lastModifiedEpoch = epoch
-                ))
+                if (oldFile.renameTo(newFile)) {
+                    // Remove old, add updated
+                    removeRecordingFromList(safeOldName)
+                    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                    val epoch = newFile.lastModified()
+                    addRecordingToList(AudioRecording(
+                        fileName = newFile.name,
+                        filePath = newFile.absolutePath,
+                        lastModified = dateFormat.format(Date(epoch)),
+                        fileSize = newFile.length(),
+                        durationSeconds = calculateWavDuration(newFile),
+                        lastModifiedEpoch = epoch
+                    ))
+                }
+            }
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: RecordingRepository? = null
+
+        fun getInstance(context: Context): RecordingRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: RecordingRepository(context.applicationContext).also { INSTANCE = it }
             }
         }
     }

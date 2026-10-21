@@ -278,42 +278,45 @@ class SegmentEmbeddingService(
 
     // ── Persistence (segment-scoped, mirroring EmbeddingIndex) ─────────
 
-    private fun ensureLoaded() {
+    private suspend fun ensureLoaded() {
         if (loaded) return
-        val file = embeddingFile()
-        if (file.exists()) {
-            try {
-                val wrapped = java.io.BufferedReader(
-                    java.io.InputStreamReader(java.io.FileInputStream(file), Charsets.UTF_8),
-                    32768
-                ).use { reader ->
-                    gson.fromJson(reader, PersistedSegmentEmbeddings::class.java)
+        writeMutex.withLock {
+            if (loaded) return
+            val file = embeddingFile()
+            if (file.exists()) {
+                try {
+                    val wrapped = java.io.BufferedReader(
+                        java.io.InputStreamReader(java.io.FileInputStream(file), Charsets.UTF_8),
+                        32768
+                    ).use { reader ->
+                        gson.fromJson(reader, PersistedSegmentEmbeddings::class.java)
+                    }
+                    // Phase 2: accept remote fingerprints ("remote-<provider>-<model>")
+                    // exactly like EmbeddingIndex.isKnownFingerprint. The old
+                    // on-device-only check treated remote-persisted vectors as
+                    // stale on every cold start → perpetual re-embedding loop.
+                    val fp = wrapped?.fingerprint
+                    val valid = fp == EmbeddingIndex.MODEL_FINGERPRINT ||
+                            (fp != null && fp.startsWith("remote-"))
+                    if (!valid) {
+                        // Either a legacy bare list (pre-fingerprint) or vectors from an
+                        // older embedding model — both live in a stale vector space.
+                        Log.i(TAG, "Stale segment embeddings (model fingerprint mismatch) — will re-embed")
+                        embeddings.clear()
+                        dimensions = 0
+                        activeFingerprint = null
+                    } else {
+                        embeddings.clear()
+                        wrapped.entries.forEach { embeddings[it.segmentId] = it }
+                        dimensions = embeddings.values.firstOrNull()?.vector?.size ?: 0
+                        activeFingerprint = fp
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load segment embeddings: ${e.message}")
                 }
-                // Phase 2: accept remote fingerprints ("remote-<provider>-<model>")
-                // exactly like EmbeddingIndex.isKnownFingerprint. The old
-                // on-device-only check treated remote-persisted vectors as
-                // stale on every cold start → perpetual re-embedding loop.
-                val fp = wrapped?.fingerprint
-                val valid = fp == EmbeddingIndex.MODEL_FINGERPRINT ||
-                        (fp != null && fp.startsWith("remote-"))
-                if (!valid) {
-                    // Either a legacy bare list (pre-fingerprint) or vectors from an
-                    // older embedding model — both live in a stale vector space.
-                    Log.i(TAG, "Stale segment embeddings (model fingerprint mismatch) — will re-embed")
-                    embeddings.clear()
-                    dimensions = 0
-                    activeFingerprint = null
-                } else {
-                    embeddings.clear()
-                    wrapped.entries.forEach { embeddings[it.segmentId] = it }
-                    dimensions = embeddings.values.firstOrNull()?.vector?.size ?: 0
-                    activeFingerprint = fp
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load segment embeddings: ${e.message}")
             }
+            loaded = true
         }
-        loaded = true
     }
 
     private fun persist(fingerprint: String = EmbeddingIndex.MODEL_FINGERPRINT) {

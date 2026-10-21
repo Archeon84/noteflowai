@@ -228,9 +228,10 @@ class NllbTranslationManager(private val context: Context) {
         for ((name, configure) in sessionOptionsList) {
             if (name in seen) continue
             seen.add(name)
+            var options: OrtSession.SessionOptions? = null
             try {
                 Log.i(TAG, "Trying $name for NLLB encoder...")
-                val options = OrtSession.SessionOptions()
+                options = OrtSession.SessionOptions()
                 configure(options)
                 encoderSession = ortEnv!!.createSession(encoderFile.absolutePath, options)
                 decoderSession = ortEnv!!.createSession(decoderFile.absolutePath, options)
@@ -247,6 +248,8 @@ class NllbTranslationManager(private val context: Context) {
                 decoderSession?.close()
                 encoderSession = null
                 decoderSession = null
+            } finally {
+                runCatching { options?.close() }
             }
         }
 
@@ -335,16 +338,8 @@ class NllbTranslationManager(private val context: Context) {
             Log.i(TAG, "Text tokens: ${textTokens.size} tokens")
 
             val allTokens = longArrayOf(srcLangToken.toLong()) + textTokens.map { it.toLong() }.toLongArray() + longArrayOf(EOS_ID.toLong())
-
-            // Diagnostic: print final encoder sequence header (first 5 + last 5)
-            val header = if (allTokens.size <= 10) {
-                allTokens.joinToString(" ") { "${it}:${sp.pieceForId(it.toInt())}" }
-            } else {
-                val first5 = (0 until 5).joinToString(" ") { "${allTokens[it]}:${sp.pieceForId(allTokens[it].toInt())}" }
-                val last5 = (allTokens.size - 5 until allTokens.size).joinToString(" ") { "${allTokens[it]}:${sp.pieceForId(allTokens[it].toInt())}" }
-                "$first5 ... $last5"
-            }
-            Log.i(TAG, "Encoder sequence (${allTokens.size} tokens): $header")
+            // User note tokens are never logged to Logcat to protect user privacy.
+            Log.i(TAG, "Encoder sequence prepared (${allTokens.size} tokens)")
 
             // The NLLB decoder's position-embedding Gather node is bounded at 1024
             // and indexes at (encoder length + decode step). To avoid overflow we
@@ -367,21 +362,23 @@ class NllbTranslationManager(private val context: Context) {
             val attentionArray = LongArray(inputArray.size) { 1L }
             val attentionTensor = OnnxTensor.createTensor(env, arrayOf(attentionArray))
 
-            val generatedHfTokens = encoder.run(mapOf(
-                "input_ids" to inputTensor,
-                "attention_mask" to attentionTensor
-            )).use { encoderOutput ->
-                val encoderHidden = encoderOutput[0] as ai.onnxruntime.OnnxTensor
-                Log.i(TAG, "encoder hidden shape: ${encoderHidden.info.shape.contentToString()}")
-                try {
-                    translateGreedy(env, decoder, encoderHidden, attentionTensor, inputArray.size, tgtLangToken, sp)
-                } finally {
-                    encoderHidden.close()
+            val generatedHfTokens = try {
+                encoder.run(mapOf(
+                    "input_ids" to inputTensor,
+                    "attention_mask" to attentionTensor
+                )).use { encoderOutput ->
+                    val encoderHidden = encoderOutput[0] as ai.onnxruntime.OnnxTensor
+                    Log.i(TAG, "encoder hidden shape: ${encoderHidden.info.shape.contentToString()}")
+                    try {
+                        translateGreedy(env, decoder, encoderHidden, attentionTensor, inputArray.size, tgtLangToken, sp)
+                    } finally {
+                        encoderHidden.close()
+                    }
                 }
+            } finally {
+                runCatching { inputTensor.close() }
+                runCatching { attentionTensor.close() }
             }
-
-            inputTensor.close()
-            attentionTensor.close()
 
             // Model outputs HF vocab IDs directly
             // Filter: skip all language tokens (ID >= 256000) and <unk> tokens.
@@ -421,26 +418,11 @@ class NllbTranslationManager(private val context: Context) {
         tgtLangToken: Int,
         sp: SpTokenizer? = null
     ): MutableList<Int> {
-        // Adaptive max length: translation is typically 1-3x source length.
-        // The NLLB decoder's position embeddings are bounded at 1024, and the
-        // effective index is (encoder length + decode step), so the decode step
-        // must stay below 1024 - inputLen or we overflow the Gather node.
-        //
-        // MEMORY CONSTRAINT: Each decode step materializes a logits tensor of
-        // shape [1, seqLen, 256000] on JVM heap (~1MB × seqLen). After model
-        // loading (~400MB+), a 4-8GB Android device has 2-6GB free. We adapt
-        // maxLen based on available heap: more headroom → longer output.
-        // Chinese translations need ~3x the English input length, so 40 was
-        // too low for anything beyond short phrases.
         val modelMaxPos = 1024
         val posLimit = (modelMaxPos - inputTokenCount - 2).coerceAtLeast(20)
         val runtime = Runtime.getRuntime()
         runtime.gc()
         val freeMB = (runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory()) / (1024 * 1024)
-        // Adaptive maxLen: more free heap → longer decode.
-        // Chinese translations need ~3x the English input length.
-        // For 150-char chunks (~40 input tokens), Chinese output needs ~120 tokens.
-        // Logits tensor peaks at ~1MB × seqLen per step; freed after each step.
         val maxLen = when {
             freeMB > 200 -> (inputTokenCount * 3 + 40).coerceIn(60, 200).coerceAtMost(posLimit)
             freeMB > 100 -> (inputTokenCount * 3 + 20).coerceIn(40, 160).coerceAtMost(posLimit)
@@ -448,125 +430,95 @@ class NllbTranslationManager(private val context: Context) {
             else         -> (inputTokenCount * 2 + 10).coerceIn(30, 60).coerceAtMost(posLimit)
         }
         val generatedTokens = mutableListOf<Int>()
-        // NLLB decoder starts with ONLY decoder_start_token_id (EOS=2).
-        // The target language token is injected by ForcedBOSTokenLogitsProcessor:
-        // when cur_len==1, it sets all logits to -inf except forced_bos_token_id.
-        // So we must start with [EOS] only — NOT [EOS, tgtLang].
         var currentIds = longArrayOf(EOS_ID.toLong())
         val tokenFrequency = mutableMapOf<Long, Int>()  // track token usage for repetition penalty
 
         for (step in 0 until maxLen) {
-            // Memory safety: check heap every 5 steps and force GC to prevent OOM.
-            // The logits tensor (~1MB × seqLen) is the main heap consumer.
             if (step % 5 == 0) {
                 runtime.gc()
-                val freeMB = (runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory()) / (1024 * 1024)
-                Log.i(TAG, "greedy step $step/$maxLen, free heap: ${freeMB}MB")
-                if (freeMB < 40) {
-                    Log.w(TAG, "Low memory at step $step (${freeMB}MB free), stopping decode early")
+                val freeMBStep = (runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory()) / (1024 * 1024)
+                Log.i(TAG, "greedy step $step/$maxLen, free heap: ${freeMBStep}MB")
+                if (freeMBStep < 40) {
+                    Log.w(TAG, "Low memory at step $step (${freeMBStep}MB free), stopping decode early")
                     break
                 }
             }
             Log.d(TAG, "greedy loop step $step, maxLen=$maxLen, currentIdsLen=${currentIds.size}")
             val decoderInput = OnnxTensor.createTensor(env, arrayOf(currentIds))
+            var shouldBreak = false
+            var shouldContinue = false
 
-            val decoderInputs = mapOf(
-                "input_ids" to decoderInput,
-                "encoder_hidden_states" to encoderHidden,
-                "encoder_attention_mask" to attentionTensor
-            )
-            if (step == 0) {
-                Log.i(TAG, "decoder input_ids shape: [1, ${currentIds.size}]")
-                Log.i(TAG, "encoderHidden shape: ${encoderHidden.info.shape}")
-                Log.i(TAG, "attentionTensor shape: ${attentionTensor.info.shape}")
-            }
-            val decoderOutput = decoder.run(decoderInputs)
             try {
-                val logits = decoderOutput[0].value as Array<Array<FloatArray>>
-                val lastLogits = logits[0][logits[0].size - 1]
-
-                // Simulate ForcedBOSTokenLogitsProcessor: at step 0 (cur_len==1),
-                // force the target language token as first generated token.
-                // This matches HuggingFace's generate() which injects the tgt lang
-                // via logits processing when the decoder input has exactly 1 token.
-                val nextToken = if (currentIds.size == 1) {
-                    Log.i(TAG, "ForcedBOS: forcing tgtLang token $tgtLangToken at step 0")
-                    tgtLangToken.toLong()
-                } else {
-                    lastLogits.indices.maxByOrNull { lastLogits[it] }?.toLong() ?: break
+                val decoderInputs = mapOf(
+                    "input_ids" to decoderInput,
+                    "encoder_hidden_states" to encoderHidden,
+                    "encoder_attention_mask" to attentionTensor
+                )
+                if (step == 0) {
+                    Log.i(TAG, "decoder input_ids shape: [1, ${currentIds.size}]")
+                    Log.i(TAG, "encoderHidden shape: ${encoderHidden.info.shape}")
+                    Log.i(TAG, "attentionTensor shape: ${attentionTensor.info.shape}")
                 }
+                val decoderOutput = decoder.run(decoderInputs)
+                try {
+                    val logits = decoderOutput[0].value as Array<Array<FloatArray>>
+                    val lastLogits = logits[0][logits[0].size - 1]
 
-                // Detailed logging for first few steps
-                if (step < 3) {
-                    // Find top-5 without sorting full array
-                    val top5Pairs = mutableListOf<Pair<Int, Float>>()
-                    for (i in lastLogits.indices) {
-                        if (top5Pairs.size < 5) {
-                            top5Pairs.add(i to lastLogits[i])
-                            top5Pairs.sortByDescending { it.second }
-                        } else if (lastLogits[i] > top5Pairs.last().second) {
-                            top5Pairs[4] = i to lastLogits[i]
-                            top5Pairs.sortByDescending { it.second }
+                    val nextToken = if (currentIds.size == 1) {
+                        Log.i(TAG, "ForcedBOS: forcing tgtLang token $tgtLangToken at step 0")
+                        tgtLangToken.toLong()
+                    } else {
+                        val maxIdx = lastLogits.indices.maxByOrNull { lastLogits[it] }
+                        if (maxIdx == null) {
+                            shouldBreak = true
+                            EOS_ID.toLong()
+                        } else {
+                            maxIdx.toLong()
                         }
                     }
-                    val top5Info = top5Pairs.joinToString(", ") { (idx, logit) ->
-                        val piece = sp?.pieceForId(idx) ?: "?"
-                        "id=$idx($piece,${String.format("%.2f", logit)})"
+
+                    if (!shouldBreak) {
+                        if (step % 20 == 0) {
+                            Log.i(TAG, "greedy step $step generated=${generatedTokens.size}")
+                        }
+
+                        if (nextToken == EOS_ID.toLong()) {
+                            Log.i(TAG, "greedy hit EOS at step $step")
+                            shouldBreak = true
+                        } else if (step > 0 && nextToken >= 256000) {
+                            Log.d(TAG, "greedy step $step: skipping language token $nextToken")
+                            tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
+                            shouldContinue = true
+                        } else if (nextToken == UNK_ID.toLong()) {
+                            Log.d(TAG, "greedy step $step: skipping unk token")
+                            tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
+                            shouldContinue = true
+                        } else {
+                            tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
+                            val maxOutputLen = (modelMaxPos - inputTokenCount - 2).coerceAtLeast(20)
+                            if (generatedTokens.size >= maxOutputLen) {
+                                Log.i(TAG, "greedy breaking: output ${generatedTokens.size} tokens >= max output $maxOutputLen")
+                                shouldBreak = true
+                            } else {
+                                generatedTokens.add(nextToken.toInt())
+                                currentIds += nextToken
+                            }
+                        }
                     }
-                    Log.i(TAG, "greedy step $step nextToken=$nextToken top5=[$top5Info]")
-                } else if (step % 20 == 0) {
-                    Log.i(TAG, "greedy step $step nextToken=$nextToken generated=${generatedTokens.size}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "greedy step $step failed: ${e.message}")
+                    Log.e(TAG, android.util.Log.getStackTraceString(e))
+                    shouldBreak = true
+                } finally {
+                    decoderOutput.close()
                 }
-
-                if (nextToken == EOS_ID.toLong()) {
-                    Log.i(TAG, "greedy hit EOS at step $step")
-                    break
-                }
-
-                // Skip target language token and any language code tokens after step 0.
-                // The model sometimes regenerates the language code mid-sequence,
-                // which produces "zho_hans" gibberish in the output.
-                if (step > 0 && nextToken >= 256000) {
-                    Log.d(TAG, "greedy step $step: skipping language token $nextToken")
-                    tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
-                    decoderInput.close()
-                    continue
-                }
-
-                // Skip unk tokens — they produce gibberish in the output
-                if (nextToken == UNK_ID.toLong()) {
-                    Log.d(TAG, "greedy step $step: skipping unk token")
-                    tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
-                    decoderInput.close()
-                    continue
-                }
-
-                // Track frequency — no aggressive break for common words.
-                // Words like "untuk", "yang", "dan" naturally appear 3-5x in translations.
-                tokenFrequency[nextToken] = (tokenFrequency[nextToken] ?: 0) + 1
-
-                // Safety: if generated output exceeds max possible output length,
-                // stop to avoid position overflow.
-                val maxOutputLen = (modelMaxPos - inputTokenCount - 2).coerceAtLeast(20)
-                if (generatedTokens.size >= maxOutputLen) {
-                    Log.i(TAG, "greedy breaking: output ${generatedTokens.size} tokens >= max output $maxOutputLen")
-                    break
-                }
-
-                generatedTokens.add(nextToken.toInt())
-                currentIds += nextToken
-            } catch (e: Exception) {
-                Log.e(TAG, "greedy step $step failed: ${e.message}")
-                Log.e(TAG, android.util.Log.getStackTraceString(e))
-                break
             } finally {
-                decoderOutput.close()
+                decoderInput.close()
             }
 
-            decoderInput.close()
-            // Hint GC to free ONNX native memory from the logits tensor.
-            // Without this, the native allocator may hold onto freed blocks,
-            // causing memory to grow unboundedly across decode steps.
+            if (shouldBreak) break
+            if (shouldContinue) continue
+
             if (step % 3 == 0) runtime.gc()
             Log.d(TAG, "greedy step $step done, continuing to step ${step + 1}")
         }

@@ -17,6 +17,18 @@ class ChatRepository(context: Context) {
     private val _sessionsFlow = MutableStateFlow<List<ChatSession>>(emptyList())
     val sessionsFlow: StateFlow<List<ChatSession>> = _sessionsFlow.asStateFlow()
 
+    private fun sanitizeId(id: String): String {
+        return id.replace(Regex("[/\\\\]"), "_")
+            .replace("..", "_")
+            .take(150)
+    }
+
+    private fun isWithinDirectory(file: File, dir: File): Boolean {
+        val dirPath = dir.canonicalPath
+        val filePath = file.canonicalPath
+        return filePath == dirPath || filePath.startsWith(dirPath + File.separator)
+    }
+
     init {
         refresh()
     }
@@ -35,23 +47,30 @@ class ChatRepository(context: Context) {
 
     suspend fun saveSession(session: ChatSession) {
         withContext(Dispatchers.IO) {
-            val file = File(chatsDir, "${session.id}.json")
+            val safeId = sanitizeId(session.id)
+            val file = File(chatsDir, "$safeId.json")
+            if (!isWithinDirectory(file, chatsDir)) return@withContext
             val json = gson.toJson(session)
-            file.writeText(json)
+            com.noteflowai.app.data.AtomicJsonFile.write(file, json)
             refresh()
         }
     }
 
     suspend fun deleteSession(id: String) {
         withContext(Dispatchers.IO) {
-            File(chatsDir, "$id.json").delete()
+            val safeId = sanitizeId(id)
+            val file = File(chatsDir, "$safeId.json")
+            if (!isWithinDirectory(file, chatsDir)) return@withContext
+            file.delete()
             refresh()
         }
     }
 
     suspend fun getSession(id: String): ChatSession? {
         return withContext(Dispatchers.IO) {
-            val file = File(chatsDir, "$id.json")
+            val safeId = sanitizeId(id)
+            val file = File(chatsDir, "$safeId.json")
+            if (!isWithinDirectory(file, chatsDir)) return@withContext null
             if (file.exists()) {
                 try {
                     gson.fromJson(file.readText(), ChatSession::class.java)
@@ -59,6 +78,17 @@ class ChatRepository(context: Context) {
                     null
                 }
             } else null
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: ChatRepository? = null
+
+        fun getInstance(context: Context): ChatRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: ChatRepository(context.applicationContext).also { INSTANCE = it }
+            }
         }
     }
 }

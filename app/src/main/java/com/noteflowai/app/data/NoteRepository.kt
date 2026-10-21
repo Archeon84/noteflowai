@@ -37,7 +37,9 @@ class NoteRepository(private val context: Context) {
     }
 
     private fun isWithinDirectory(file: File, dir: File): Boolean {
-        return file.canonicalPath.startsWith(dir.canonicalPath)
+        val dirPath = dir.canonicalPath
+        val filePath = file.canonicalPath
+        return filePath == dirPath || filePath.startsWith(dirPath + File.separator)
     }
 
     private val _notesFlow = MutableStateFlow<List<NoteFile>>(emptyList())
@@ -157,6 +159,10 @@ class NoteRepository(private val context: Context) {
         _notesFlow.value = sortedList(_notesFlow.value.filter { it.fileName != note.fileName } + note)
     }
 
+    private fun notifyWidgetSafely() {
+        runCatching { com.noteflowai.app.widget.NoteFlowWidget.notifyNotesChanged(context) }
+    }
+
     suspend fun saveNote(
         fileName: String,
         content: String,
@@ -265,12 +271,13 @@ class NoteRepository(private val context: Context) {
         file.writeText(gson.toJson(note))
 
         // Delete old .txt if it exists
-        val oldTxt = File(notesDir, fileName.removeSuffix(".json") + ".txt")
-        if (oldTxt.exists()) oldTxt.delete()
+        val oldTxt = File(notesDir, safeName.removeSuffix(".json").removeSuffix(".txt") + ".txt")
+        if (oldTxt.exists() && isWithinDirectory(oldTxt, notesDir)) oldTxt.delete()
 
         // Update in-memory list instead of full disk re-read
         val epoch = file.lastModified()
         addNoteToList(note.copy(lastModified = dateFormat.format(Date(epoch)), lastModifiedEpoch = epoch))
+        notifyWidgetSafely()
         return note
     }
 
@@ -333,43 +340,47 @@ class NoteRepository(private val context: Context) {
      * reading the file directly (used by SourceProcessingPipeline self-healing).
      */
     suspend fun getNoteFile(fileName: String): NoteFile? = withContext(Dispatchers.IO) {
-        _notesFlow.value.firstOrNull { it.fileName == fileName }?.let { cached ->
+        val safeName = sanitizeFileName(fileName)
+        _notesFlow.value.firstOrNull { it.fileName == safeName }?.let { cached ->
             // Ensure content is populated (metadata-only entries have blank content)
             if (cached.content.isNotBlank()) return@withContext cached
         }
-        val file = File(notesDir, sanitizeFileName(fileName))
+        val file = File(notesDir, safeName)
         if (!isWithinDirectory(file, notesDir) || !file.exists()) return@withContext null
         return@withContext try {
             if (file.extension == "json") {
                 gson.fromJson(file.readText(), NoteFile::class.java)?.sanitized()
             } else {
                 val content = file.readText()
-                NoteFile(fileName = fileName, lastModified = "", preview = content.take(200), content = content)
+                NoteFile(fileName = safeName, lastModified = "", preview = content.take(200), content = content)
             }
         } catch (e: Exception) { null }
     }
 
     suspend fun deleteNote(fileName: String) {
         withContext(Dispatchers.IO) {
-            val file = File(notesDir, sanitizeFileName(fileName))
+            val safeName = sanitizeFileName(fileName)
+            val file = File(notesDir, safeName)
             if (!isWithinDirectory(file, notesDir)) return@withContext
             file.delete()
-            removeNoteFromList(fileName)
+            removeNoteFromList(safeName)
+            notifyWidgetSafely()
 
             // Personal Memory Layer: cascade delete source segments (non-blocking, behind feature flag)
-            sourceSegmentManager?.onSourceDeleted(fileName)
+            sourceSegmentManager?.onSourceDeleted(safeName)
 
             // Phase 1: cancel any pending processing job and drop the raw capture row.
-            CaptureJobScheduler.cancel(context, fileName)
+            CaptureJobScheduler.cancel(context, safeName)
             scope.launch {
-                runCatching { RawCaptureRepository.getInstance(context).deleteBySourceId(fileName) }
+                runCatching { RawCaptureRepository.getInstance(context).deleteBySourceId(safeName) }
             }
         }
     }
 
     suspend fun renameNote(oldName: String, newName: String) {
         withContext(Dispatchers.IO) {
-            val oldFile = File(notesDir, sanitizeFileName(oldName))
+            val safeOldName = sanitizeFileName(oldName)
+            val oldFile = File(notesDir, safeOldName)
             val cleanNewName = if (newName.endsWith(".json")) sanitizeFileName(newName) else "${sanitizeFileName(newName)}.json"
             val newFile = File(notesDir, cleanNewName)
             if (!isWithinDirectory(oldFile, notesDir) || !isWithinDirectory(newFile, notesDir)) return@withContext
@@ -381,11 +392,13 @@ class NoteRepository(private val context: Context) {
                     newFile.writeText(gson.toJson(updated))
                     oldFile.delete()
                     // Update in-memory list: remove old, add updated
-                    removeNoteFromList(oldName)
+                    removeNoteFromList(safeOldName)
                     addNoteToList(updated)
+                    notifyWidgetSafely()
                 } else {
                     oldFile.renameTo(newFile)
                     refreshNotesList() // Fallback for .txt files
+                    notifyWidgetSafely()
                 }
             }
         }
@@ -400,6 +413,7 @@ class NoteRepository(private val context: Context) {
                 val updated = note.copy(pinned = !note.pinned)
                 file.writeText(gson.toJson(updated))
                 updateNoteInList(updated)
+                notifyWidgetSafely()
             }
         }
     }
@@ -413,6 +427,17 @@ class NoteRepository(private val context: Context) {
                 val updated = note.copy(tags = tags.distinctBy { it.lowercase() })
                 file.writeText(gson.toJson(updated))
                 updateNoteInList(updated)
+            }
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: NoteRepository? = null
+
+        fun getInstance(context: Context): NoteRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: NoteRepository(context.applicationContext).also { INSTANCE = it }
             }
         }
     }

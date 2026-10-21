@@ -576,22 +576,27 @@ abstract class MemoryDatabase : RoomDatabase() {
          * passphrase never exists in plaintext on disk and survives restarts.
          */
         private fun memoryDbPassphrase(context: Context): ByteArray {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val prefs = EncryptedSharedPreferences.create(
-                context,
-                "noteflow_secure_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            val prefs = try {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                EncryptedSharedPreferences.create(
+                    context,
+                    "noteflow_secure_prefs",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            } catch (e: Exception) {
+                context.getSharedPreferences("noteflow_secure_prefs_fallback", Context.MODE_PRIVATE)
+            }
             var passphrase = prefs.getString(ENC_MEMORY_DB_PASSPHRASE, null)
             if (passphrase == null) {
                 val random = ByteArray(32)
                 SecureRandom().nextBytes(random)
                 passphrase = Base64.encodeToString(random, Base64.NO_WRAP)
-                prefs.edit().putString(ENC_MEMORY_DB_PASSPHRASE, passphrase).apply()
+                // Synchronous commit() guarantees passphrase is on disk before SQLCipher creates DB
+                prefs.edit().putString(ENC_MEMORY_DB_PASSPHRASE, passphrase).commit()
             }
             return passphrase.toByteArray(Charsets.US_ASCII)
         }

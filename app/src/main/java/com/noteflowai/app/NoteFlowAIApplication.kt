@@ -18,6 +18,11 @@ import java.util.Locale
 class NoteFlowAIApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Wire the global Local-Only network firewall before any background work or UI starts.
+        com.noteflowai.app.data.NetworkModule.setLocalOnlyChecker {
+            com.noteflowai.app.data.settings.SettingsManager.getInstance(applicationContext).isLocalOnlyModeBlocking
+        }
+
         // Phase 1: resume any interrupted capture-processing work across process death.
         // Captures recorded before a force-close are re-enqueued as unique WorkManager jobs.
         CaptureJobScheduler.recoverPending(applicationContext)

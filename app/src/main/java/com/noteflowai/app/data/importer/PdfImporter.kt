@@ -28,17 +28,20 @@ class PdfImporter(private val context: Context) : ContentImporter {
     override suspend fun inspect(input: ImportInput): ImportInspection = withContext(Dispatchers.IO) {
         val stream = openStream(input) ?: return@withContext ImportInspection(isSupported = false, formatLabel = "PDF")
         try {
-            val doc = if (input.password.isNullOrBlank()) PDDocument.load(stream) else PDDocument.load(stream, input.password)
-            val pages = doc.numberOfPages
-            val isEncrypted = doc.isEncrypted
-            doc.close()
-            ImportInspection(
-                isSupported = true,
-                isPasswordProtected = isEncrypted,
-                formatLabel = "PDF",
-                pageCount = pages,
-                estimatedBytes = input.file?.length() ?: 0L
-            )
+            stream.use { s ->
+                val doc = if (input.password.isNullOrBlank()) PDDocument.load(s) else PDDocument.load(s, input.password)
+                doc.use { d ->
+                    val pages = d.numberOfPages
+                    val isEncrypted = d.isEncrypted
+                    ImportInspection(
+                        isSupported = true,
+                        isPasswordProtected = isEncrypted,
+                        formatLabel = "PDF",
+                        pageCount = pages,
+                        estimatedBytes = input.file?.length() ?: 0L
+                    )
+                }
+            }
         } catch (e: InvalidPasswordException) {
             ImportInspection(
                 isSupported = true,
@@ -58,11 +61,13 @@ class PdfImporter(private val context: Context) : ContentImporter {
             ?: return@withContext ImportResult.Failure(ImportError.MalformedContent, "Cannot open PDF stream")
 
         try {
-            val doc = if (input.password.isNullOrBlank()) PDDocument.load(stream) else PDDocument.load(stream, input.password)
-            val stripper = PDFTextStripper()
-            val text = stripper.getText(doc)
-            val pageCount = doc.numberOfPages
-            doc.close()
+            val text = stream.use { s ->
+                val doc = if (input.password.isNullOrBlank()) PDDocument.load(s) else PDDocument.load(s, input.password)
+                doc.use { d ->
+                    val stripper = PDFTextStripper()
+                    stripper.getText(d)
+                }
+            }
 
             if (text.isBlank()) {
                 return@withContext ImportResult.Failure(

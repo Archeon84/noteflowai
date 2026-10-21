@@ -1,6 +1,7 @@
 package com.noteflowai.app.data.export
 
 import com.noteflowai.app.data.NoteFile
+import com.noteflowai.app.data.displayTitle
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -15,7 +16,12 @@ object HtmlExporter {
      * Generate a complete HTML5 document from a note.
      */
     fun export(note: NoteFile): String {
-        val dateStr = DATE_FORMAT.format(Date(note.lastModified))
+        val dateStr = if (note.lastModifiedEpoch > 0L) {
+            escapeHtml(DATE_FORMAT.format(Date(note.lastModifiedEpoch)))
+        } else {
+            escapeHtml(note.lastModified)
+        }
+        val titleStr = escapeHtml(note.displayTitle)
         val tagsHtml = if (note.tags.isNotEmpty()) {
             note.tags.joinToString("") { "<span class=\"tag\">${escapeHtml(it)}</span>" }
         } else ""
@@ -26,7 +32,7 @@ object HtmlExporter {
             appendLine("<head>")
             appendLine("<meta charset=\"UTF-8\">")
             appendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">")
-            appendLine("<title>${escapeHtml(note.fileName)}</title>")
+            appendLine("<title>$titleStr</title>")
             appendLine("<style>")
             appendLine(CSS)
             appendLine("</style>")
@@ -46,7 +52,7 @@ object HtmlExporter {
             appendLine("</div>")
 
             // Title
-            appendLine("<h1>${escapeHtml(note.fileName)}</h1>")
+            appendLine("<h1>$titleStr</h1>")
 
             // Content
             appendLine("<div class=\"content\">")
@@ -180,11 +186,15 @@ object HtmlExporter {
             i++
         }
 
+        if (inCodeBlock && codeBuffer.isNotEmpty()) {
+            sb.append("<pre><code>${escapeHtml(codeBuffer.toString().trimEnd())}</code></pre>\n")
+        }
+
         return sb.toString()
     }
 
     private fun inlineHtml(text: String): String {
-        var result = text
+        var result = escapeHtml(text)
         // Bold
         result = result.replace(Regex("\\*\\*(.+?)\\*\\*"), "<strong>$1</strong>")
         result = result.replace(Regex("__(.+?)__"), "<strong>$1</strong>")

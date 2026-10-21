@@ -94,9 +94,12 @@ class AudioRecorderHelper {
                                 fos.write(chunk)
                                 onChunkRead?.invoke(chunk)
                                 totalAudioLen += read
+                            } else if (read < 0) {
+                                break
                             }
                         } else {
-                            audioRecord?.read(buffer, 0, buffer.size)
+                            val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                            if (read < 0) break
                             delay(100)
                         }
 

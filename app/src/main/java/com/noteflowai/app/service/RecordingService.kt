@@ -12,6 +12,9 @@ import androidx.core.app.NotificationCompat
 import com.noteflowai.app.MainActivity
 import com.noteflowai.app.R
 
+import android.content.pm.ServiceInfo
+import android.os.Build
+
 class RecordingService : Service() {
 
     companion object {
@@ -40,10 +43,24 @@ class RecordingService : Service() {
 
         val isScheduled = intent?.getBooleanExtra("scheduled", false) == true
         val notification = buildNotification(isScheduled)
-        startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("RecordingService", "Cannot start foreground microphone service: ${e.message}", e)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         acquireWakeLock()
         scheduleAutoStop(intent?.getIntExtra("duration_minutes", 0) ?: 0)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /**
@@ -72,7 +89,8 @@ class RecordingService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "NoteFlowAI::RecordingWakeLock"
             ).apply {
-                acquire()
+                // Bounded 4-hour safety timeout so battery cannot drain forever on crash
+                acquire(4 * 60 * 60 * 1000L)
             }
         }
     }

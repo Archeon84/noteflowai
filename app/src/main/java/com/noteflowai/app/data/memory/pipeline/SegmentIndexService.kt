@@ -159,17 +159,16 @@ class SegmentIndexService(
     suspend fun search(query: String, maxResults: Int = 10): List<SegmentHit> = withContext(Dispatchers.IO) {
         ensureLoaded()
         val queryTokens = tokenize(query)
-        if (queryTokens.isEmpty() || entries.isEmpty()) return@withContext emptyList()
+        if (queryTokens.isEmpty()) return@withContext emptyList()
 
-        // Corpus statistics are cached at mutation time, so a search is a pure
-        // per-document scoring pass with no corpus-wide recomputation.
-        val docCount = totalDocs
-        val avgLen = avgLength
-        val df = docFreq
+        val (docList, docCount, avgLen, df) = writeMutex.withLock {
+            if (entries.isEmpty()) return@withContext emptyList()
+            Quadruple(entries.values.toList(), totalDocs, avgLength, docFreq)
+        }
 
         data class Scored(val entry: Entry, val score: Float)
 
-        val scored = entries.values.mapNotNull { entry ->
+        val scored = docList.mapNotNull { entry ->
             val tf = entry.tf ?: computeTF(entry.tokens)
             var total = 0f
             for (token in queryTokens) {
@@ -196,6 +195,8 @@ class SegmentIndexService(
             }
     }
 
+    private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
     fun size(): Int = entries.size
 
     /**
@@ -218,28 +219,31 @@ class SegmentIndexService(
 
     // ── Persistence ───────────────────────────────────────────────────
 
-    private fun ensureLoaded() {
+    private suspend fun ensureLoaded() {
         if (loaded) return
-        val file = indexFile()
-        if (file.exists()) {
-            try {
-                val type = object : TypeToken<List<Entry>>() {}.type
-                val list: List<Entry> = java.io.BufferedReader(
-                    java.io.InputStreamReader(java.io.FileInputStream(file), Charsets.UTF_8),
-                    32768
-                ).use { reader ->
-                    gson.fromJson(reader, type)
+        writeMutex.withLock {
+            if (loaded) return
+            val file = indexFile()
+            if (file.exists()) {
+                try {
+                    val type = object : TypeToken<List<Entry>>() {}.type
+                    val list: List<Entry> = java.io.BufferedReader(
+                        java.io.InputStreamReader(java.io.FileInputStream(file), Charsets.UTF_8),
+                        32768
+                    ).use { reader ->
+                        gson.fromJson(reader, type)
+                    }
+                    // Older persisted entries have no tf map; backfill it on load.
+                    entries = list.associateBy { it.segmentId }.toMutableMap().mapValues { (_, e) ->
+                        if (e.tf == null) e.copy(tf = computeTF(e.tokens)) else e
+                    }.toMutableMap()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load segment index: ${e.message}")
                 }
-                // Older persisted entries have no tf map; backfill it on load.
-                entries = list.associateBy { it.segmentId }.toMutableMap().mapValues { (_, e) ->
-                    if (e.tf == null) e.copy(tf = computeTF(e.tokens)) else e
-                }.toMutableMap()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load segment index: ${e.message}")
             }
+            refreshStats()
+            loaded = true
         }
-        refreshStats()
-        loaded = true
     }
 
     private fun persist() {

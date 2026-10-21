@@ -20,17 +20,21 @@ class ScheduledRecordingReceiver : BroadcastReceiver() {
                     putExtra("duration_minutes", durationMinutes)
                     putExtra("scheduled", true)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent)
-                } else {
-                    context.startService(serviceIntent)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ScheduledRecording", "Failed to start recording service from background: ${e.message}", e)
                 }
             }
             ACTION_STOP_SCHEDULED -> {
                 val serviceIntent = Intent(context, RecordingService::class.java).apply {
                     action = RecordingService.ACTION_STOP
                 }
-                context.startService(serviceIntent)
+                runCatching { context.stopService(serviceIntent) }
             }
         }
     }

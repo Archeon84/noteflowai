@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <mutex>
 #include <android/log.h>
 
 #define LOG_TAG "WhisperMel"
@@ -21,88 +22,87 @@ static float melFilterbank[N_MEL][N_FREQ_BINS];
 // Precomputed DFT twiddle factors: dftCos[k*N_FFT+n] = cos(2*pi*k*n/N_FFT)
 static float dftCos[N_FREQ_BINS * N_FFT];
 static float dftSin[N_FREQ_BINS * N_FFT];
+static std::once_flag g_tables_once;
 
 static void init_tables() {
-    static bool initialized = false;
-    if (initialized) return;
-    initialized = true;
-
-    // Hann window (periodic, size 400)
-    for (int i = 0; i < N_FFT; i++) {
-        hannWindow[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / N_FFT));
-    }
-
-    // Precompute DFT twiddle factors
-    for (int k = 0; k < N_FREQ_BINS; k++) {
-        for (int n = 0; n < N_FFT; n++) {
-            float angle = 2.0f * M_PI * k * n / N_FFT;
-            dftCos[k * N_FFT + n] = cosf(angle);
-            dftSin[k * N_FFT + n] = -sinf(angle);
+    std::call_once(g_tables_once, []() {
+        // Hann window (periodic, size 400)
+        for (int i = 0; i < N_FFT; i++) {
+            hannWindow[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / N_FFT));
         }
-    }
 
-    // Slaney mel scale
-    auto hzToMelSlaney = [](float freq) -> float {
-        if (freq >= 1000.0f) {
-            float minLogMel = 15.0f;
-            float logstep = 27.0f / logf(6.4f);
-            return minLogMel + logf(freq / 1000.0f) * logstep;
-        }
-        return 3.0f * freq / 200.0f;
-    };
-
-    auto melToHzSlaney = [](float mel) -> float {
-        if (mel >= 15.0f) {
-            float minLogHertz = 1000.0f;
-            float minLogMel = 15.0f;
-            float logstep = logf(6.4f) / 27.0f;
-            return minLogHertz * expf(logstep * (mel - minLogMel));
-        }
-        return 200.0f * mel / 3.0f;
-    };
-
-    float melMin = hzToMelSlaney(0.0f);
-    float melMax = hzToMelSlaney(8000.0f);
-    float melPointsHz[N_MEL + 2];
-    for (int i = 0; i < N_MEL + 2; i++) {
-        melPointsHz[i] = melToHzSlaney(melMin + i * (melMax - melMin) / (N_MEL + 1));
-    }
-
-    float fftFreqs[N_FREQ_BINS];
-    for (int k = 0; k < N_FREQ_BINS; k++) {
-        fftFreqs[k] = (float)k * SAMPLE_RATE / N_FFT;
-    }
-
-    for (int m = 0; m < N_MEL; m++) {
-        float lowFreq = melPointsHz[m];
-        float centerFreq = melPointsHz[m + 1];
-        float highFreq = melPointsHz[m + 2];
-
+        // Precompute DFT twiddle factors
         for (int k = 0; k < N_FREQ_BINS; k++) {
-            float freq = fftFreqs[k];
-            if (freq <= lowFreq || freq >= highFreq) {
-                melFilterbank[m][k] = 0.0f;
-            } else if (freq <= centerFreq) {
-                melFilterbank[m][k] = (centerFreq - lowFreq > 0.0f) ?
-                    (freq - lowFreq) / (centerFreq - lowFreq) : 0.0f;
-            } else {
-                melFilterbank[m][k] = (highFreq - centerFreq > 0.0f) ?
-                    (highFreq - freq) / (highFreq - centerFreq) : 0.0f;
+            for (int n = 0; n < N_FFT; n++) {
+                float angle = 2.0f * M_PI * k * n / N_FFT;
+                dftCos[k * N_FFT + n] = cosf(angle);
+                dftSin[k * N_FFT + n] = -sinf(angle);
             }
         }
 
-        float lowMel = hzToMelSlaney(melPointsHz[m]);
-        float highMel = hzToMelSlaney(melPointsHz[m + 2]);
-        float bandwidth = highMel - lowMel;
-        if (bandwidth > 0.0f) {
-            float enorm = 2.0f / bandwidth;
+        // Slaney mel scale
+        auto hzToMelSlaney = [](float freq) -> float {
+            if (freq >= 1000.0f) {
+                float minLogMel = 15.0f;
+                float logstep = 27.0f / logf(6.4f);
+                return minLogMel + logf(freq / 1000.0f) * logstep;
+            }
+            return 3.0f * freq / 200.0f;
+        };
+
+        auto melToHzSlaney = [](float mel) -> float {
+            if (mel >= 15.0f) {
+                float minLogHertz = 1000.0f;
+                float minLogMel = 15.0f;
+                float logstep = logf(6.4f) / 27.0f;
+                return minLogHertz * expf(logstep * (mel - minLogMel));
+            }
+            return 200.0f * mel / 3.0f;
+        };
+
+        float melMin = hzToMelSlaney(0.0f);
+        float melMax = hzToMelSlaney(8000.0f);
+        float melPointsHz[N_MEL + 2];
+        for (int i = 0; i < N_MEL + 2; i++) {
+            melPointsHz[i] = melToHzSlaney(melMin + i * (melMax - melMin) / (N_MEL + 1));
+        }
+
+        float fftFreqs[N_FREQ_BINS];
+        for (int k = 0; k < N_FREQ_BINS; k++) {
+            fftFreqs[k] = (float)k * SAMPLE_RATE / N_FFT;
+        }
+
+        for (int m = 0; m < N_MEL; m++) {
+            float lowFreq = melPointsHz[m];
+            float centerFreq = melPointsHz[m + 1];
+            float highFreq = melPointsHz[m + 2];
+
             for (int k = 0; k < N_FREQ_BINS; k++) {
-                melFilterbank[m][k] *= enorm;
+                float freq = fftFreqs[k];
+                if (freq <= lowFreq || freq >= highFreq) {
+                    melFilterbank[m][k] = 0.0f;
+                } else if (freq <= centerFreq) {
+                    melFilterbank[m][k] = (centerFreq - lowFreq > 0.0f) ?
+                        (freq - lowFreq) / (centerFreq - lowFreq) : 0.0f;
+                } else {
+                    melFilterbank[m][k] = (highFreq - centerFreq > 0.0f) ?
+                        (highFreq - freq) / (highFreq - centerFreq) : 0.0f;
+                }
+            }
+
+            float lowMel = hzToMelSlaney(melPointsHz[m]);
+            float highMel = hzToMelSlaney(melPointsHz[m + 2]);
+            float bandwidth = highMel - lowMel;
+            if (bandwidth > 0.0f) {
+                float enorm = 2.0f / bandwidth;
+                for (int k = 0; k < N_FREQ_BINS; k++) {
+                    melFilterbank[m][k] *= enorm;
+                }
             }
         }
-    }
 
-    LOGI("init_tables: DFT twiddle factors and mel filterbank computed (N_FFT=%d, N_FREQ_BINS=%d)", N_FFT, N_FREQ_BINS);
+        LOGI("init_tables: DFT twiddle factors and mel filterbank computed (N_FFT=%d, N_FREQ_BINS=%d)", N_FFT, N_FREQ_BINS);
+    });
 }
 
 extern "C"
@@ -207,7 +207,9 @@ Java_com_noteflowai_app_whisper_WhisperMelSpectrogram_computeNative(
     LOGI("Normalized mel: min=%.3f max=%.3f", normMin, normMax);
 
     jfloatArray outArray = env->NewFloatArray(N_MEL * N_FRAMES);
-    env->SetFloatArrayRegion(outArray, 0, N_MEL * N_FRAMES, result);
+    if (outArray != nullptr) {
+        env->SetFloatArrayRegion(outArray, 0, N_MEL * N_FRAMES, result);
+    }
 
     // Free heap-allocated work buffers
     free(padded);

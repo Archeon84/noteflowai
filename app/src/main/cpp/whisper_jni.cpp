@@ -94,8 +94,18 @@ static std::vector<float> load_wav(const std::string& fname) {
     if (sampleRate != 16000 || numChannels != 1) return {};
     if (dataSize == 0) return {};
 
+    // Clamp dataSize to actual remaining bytes in file to prevent OOM on corrupt headers
+    std::streampos dataStartPos = file.tellg();
+    if (dataStartPos < 0 || (uint32_t)dataStartPos >= fileSize) return {};
+    uint32_t remainingFileBytes = fileSize - (uint32_t)dataStartPos;
+    if (dataSize > remainingFileBytes) {
+        LOGW("load_wav: clamping header dataSize=%u to remainingFileBytes=%u", dataSize, remainingFileBytes);
+        dataSize = remainingFileBytes;
+    }
+
     // Read PCM data
     uint32_t numSamples = dataSize / 2;
+    if (numSamples == 0) return {};
     std::vector<int16_t> pcm16(numSamples);
 
     // Read in a loop to handle partial reads
@@ -225,25 +235,21 @@ Java_com_noteflowai_app_whisper_WhisperBridge_transcribe(
     }
 
     std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_ctx) {
+        env->ReleaseStringUTFChars(language, langCode);
+        if (promptStr) env->ReleaseStringUTFChars(initialPrompt, promptStr);
+        return env->NewStringUTF("[Error: Whisper engine not initialized. Load a model first.]");
+    }
 
     // Determine the language to use for transcription
-    bool needDetect = (langCode == nullptr || langCode[0] == '\0');
-    std::string detectedLang = "en"; // fallback
+    bool needDetect = (langCode == nullptr || langCode[0] == '\0' || strcmp(langCode, "auto") == 0);
 
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
 
-    if (needDetect) {
-        // Use lightweight auto-detect instead of full inference pass
-        int langId = whisper_lang_auto_detect(g_ctx, 0, g_n_threads, nullptr);
-        const char* langStr = whisper_lang_str(langId);
-        if (langStr) detectedLang = langStr;
-        LOGI("transcribe: detected language id=%d str='%s'", langId, detectedLang.c_str());
-    }
-
-    // Transcribe with explicit language
+    // Transcribe with explicit language or native whisper_full auto-detect ("auto")
     params.translate = !transcribe;
-    params.language = needDetect ? detectedLang.c_str() : langCode;
-    params.detect_language = false;  // always false — we handle detection ourselves
+    params.language = needDetect ? "auto" : langCode;
+    params.detect_language = false;
     params.print_realtime = false;
     params.print_progress = false;
     params.print_timestamps = false;
@@ -386,14 +392,21 @@ Java_com_noteflowai_app_whisper_WhisperBridge_diagnoseWav(
     diag += "Data Size: " + std::to_string(dataSize) + " bytes\n";
 
     if (dataFound && dataSize > 0) {
-        uint32_t numSamples = dataSize / 2;
+        std::streampos dataPos = file.tellg();
+        uint32_t remainingBytes = (dataPos >= 0 && (uint32_t)dataPos < fileSize)
+            ? (fileSize - (uint32_t)dataPos) : 0;
+        uint32_t safeDataSize = std::min(dataSize, remainingBytes);
+        uint32_t numSamples = safeDataSize / 2;
         diag += "Samples: " + std::to_string(numSamples) + "\n";
-        diag += "Duration: " + std::to_string((float)numSamples / sampleRate) + "s\n";
+        float durationSec = (sampleRate > 0) ? ((float)numSamples / sampleRate) : 0.0f;
+        diag += "Duration: " + std::to_string(durationSec) + "s\n";
 
         // Read first few samples to check energy
         std::vector<int16_t> check(std::min(numSamples, (uint32_t)16000));
-        file.read(reinterpret_cast<char*>(check.data()), check.size() * 2);
-        uint32_t nRead = (uint32_t)file.gcount() / 2;
+        if (!check.empty()) {
+            file.read(reinterpret_cast<char*>(check.data()), check.size() * 2);
+        }
+        uint32_t nRead = check.empty() ? 0 : (uint32_t)file.gcount() / 2;
 
         double sumSq = 0;
         int16_t maxVal = 0;
@@ -403,16 +416,18 @@ Java_com_noteflowai_app_whisper_WhisperBridge_diagnoseWav(
             if (s > maxVal) maxVal = s;
             sumSq += (double)check[i] * check[i];
         }
-        double rms = sqrt(sumSq / nRead);
+        double rms = (nRead > 0) ? sqrt(sumSq / nRead) : 0.0;
         diag += "Max Sample: " + std::to_string(maxVal) + "\n";
         diag += "RMS: " + std::to_string(rms) + "\n";
 
         // Check first 16 bytes as hex
-        file.seekg(44, std::ios::beg);
-        char pcmCheck[16];
+        file.clear();
+        file.seekg(dataPos >= 0 ? dataPos : std::streampos(44), std::ios::beg);
+        char pcmCheck[16] = {0};
         file.read(pcmCheck, 16);
+        int hexBytes = (int)file.gcount();
         diag += "First PCM hex: ";
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < hexBytes; i++) {
             char buf[4];
             snprintf(buf, sizeof(buf), "%02x", (unsigned char)pcmCheck[i]);
             diag += buf;

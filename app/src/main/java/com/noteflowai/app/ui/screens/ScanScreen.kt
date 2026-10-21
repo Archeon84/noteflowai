@@ -85,9 +85,10 @@ fun ScanScreen(viewModel: MainViewModel) {
 
     fun isExtractedTextValid(text: String): Boolean {
         return text.isNotBlank() &&
-            !text.startsWith("[") &&
+            !text.startsWith("[Error") &&
             !text.startsWith("No text found") &&
             !text.startsWith("OCR failed") &&
+            !text.startsWith("Capture failed:") &&
             !text.startsWith("Error:")
     }
 
@@ -195,6 +196,13 @@ fun ScanScreen(viewModel: MainViewModel) {
             Spacer(modifier = Modifier.height(AppSpacing.sm))
 
             if (cameraGranted) {
+                DisposableEffect(lifecycleOwner) {
+                    onDispose {
+                        runCatching {
+                            ProcessCameraProvider.getInstance(context).get().unbindAll()
+                        }
+                    }
+                }
                 // Camera preview - shows real capture area
                 Box(
                     modifier = Modifier

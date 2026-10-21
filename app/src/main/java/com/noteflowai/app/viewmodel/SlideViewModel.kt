@@ -31,7 +31,7 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val settingsManager = SettingsManager.getInstance(application)
-    private val noteRepository = NoteRepository(application)
+    private val noteRepository = NoteRepository.getInstance(application)
     private val aiChatRepository = AiChatRepository()
     private val liteRtInferenceManager = LiteRtInferenceManager(application)
 

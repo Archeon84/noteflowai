@@ -1200,6 +1200,9 @@
     <string name="privacy_temp_clear_failed">Failed to clear temporary files</string>
     <string name="privacy_create_encrypted_backup">Export Encrypted Backup (.enc.zip)</string>
     <string name="privacy_password_prompt">Enter Backup Password</string>
+    <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="privacy_policy_desc">Read our 100% on-device zero-telemetry privacy policy</string>
+    <string name="privacy_policy_url">https://github.com/Archeon84/noteflowai/blob/main/docs/PRIVACY_POLICY.md</string>
 
     <!-- Importer Reliability (Phase 8) -->
     <string name="import_error_unsupported_format">This file type is not supported. Please select a supported document (PDF, DOCX, TXT, HTML) or audio file.</string>

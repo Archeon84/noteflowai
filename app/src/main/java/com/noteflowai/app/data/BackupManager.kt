@@ -33,7 +33,16 @@ class BackupManager(private val context: Context) {
     private val chatsDir = File(context.filesDir, "chats")
 
     private fun isWithinDirectory(file: File, dir: File): Boolean {
-        return file.canonicalPath.startsWith(dir.canonicalPath)
+        val dirPath = dir.canonicalPath
+        val filePath = file.canonicalPath
+        return filePath == dirPath || filePath.startsWith(dirPath + File.separator)
+    }
+
+    private fun isValidEntryFileName(fileName: String): Boolean {
+        return fileName.isNotBlank() &&
+            !fileName.contains("..") &&
+            !fileName.contains('/') &&
+            !fileName.contains('\\')
     }
 
     data class BackupResult(val success: Boolean, val message: String, val file: File? = null)
@@ -275,6 +284,7 @@ class BackupManager(private val context: Context) {
                             }
                             name.startsWith("notes/") && !entry.isDirectory -> {
                                 val fileName = name.removePrefix("notes/")
+                                if (!isValidEntryFileName(fileName)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 val destFile = File(notesDir, fileName)
                                 if (!isWithinDirectory(destFile, notesDir)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 if (overwrite || !destFile.exists()) {
@@ -284,6 +294,7 @@ class BackupManager(private val context: Context) {
                             }
                             name.startsWith("recordings/") && !entry.isDirectory -> {
                                 val fileName = name.removePrefix("recordings/")
+                                if (!isValidEntryFileName(fileName)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 val destFile = File(recordingsDir, fileName)
                                 if (!isWithinDirectory(destFile, recordingsDir)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 if (overwrite || !destFile.exists()) {
@@ -293,6 +304,7 @@ class BackupManager(private val context: Context) {
                             }
                             name.startsWith("chats/") && !entry.isDirectory -> {
                                 val fileName = name.removePrefix("chats/")
+                                if (!isValidEntryFileName(fileName)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 val destFile = File(chatsDir, fileName)
                                 if (!isWithinDirectory(destFile, chatsDir)) { zis.closeEntry(); entry = zis.nextEntry; continue }
                                 if (overwrite || !destFile.exists()) {

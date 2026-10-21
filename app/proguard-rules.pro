@@ -1,7 +1,8 @@
 # Gson
--keepattributes Signature
+-keepattributes Signature, InnerClasses, EnclosingMethod
 -keepattributes *Annotation*
 -keep class com.google.gson.** { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
 -keep class * implements com.google.gson.TypeAdapterFactory
 -keep class * implements com.google.gson.JsonSerializer
 -keep class * implements com.google.gson.JsonDeserializer
@@ -9,6 +10,7 @@
 # Data classes used with Gson (keep field names for serialization)
 -keep class com.noteflowai.app.data.** { *; }
 -keep class com.noteflowai.app.data.chat.** { *; }
+-keep class com.noteflowai.app.util.** { *; }
 
 # OkHttp
 -dontwarn okhttp3.**
@@ -25,8 +27,7 @@
 -keep class com.google.api.client.** { *; }
 
 # Whisper JNI
--keep class com.noteflowai.app.whisper.WhisperBridge { *; }
--keep class com.noteflowai.app.whisper.WhisperQnnBridge { *; }
+-keep class com.noteflowai.app.whisper.** { *; }
 
 # Llama JNI
 -keep class com.noteflowai.app.data.LlamaInferenceManager { *; }
@@ -51,3 +52,17 @@
 # Jsoup
 -keep class org.jsoup.** { *; }
 -dontwarn org.jsoup.**
+
+# Google LiteRT-LM (AI Edge On-Device LLM)
+-keep class com.google.ai.edge.litertlm.** { *; }
+-dontwarn com.google.ai.edge.litertlm.**
+
+# ONNX Runtime Android (Granite Embeddings & GTE Reranker)
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
+
+# SQLCipher Android (AES-256 Room Database Encryption)
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.**
+

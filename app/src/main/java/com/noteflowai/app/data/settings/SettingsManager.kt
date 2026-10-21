@@ -35,7 +35,7 @@ data class AiPreset(
 )
 
 class SettingsManager(
-    context: Context,
+    private val context: Context,
     private val dataStore: DataStore<Preferences> = context.applicationContext.dataStore
 ) {
     /** Expose raw DataStore for one-shot preference reads without adding per-key flows. */
@@ -295,9 +295,12 @@ class SettingsManager(
         dataStore.edit { it[ENABLE_LOCAL_LLM_FALLBACK] = enabled }
     }
 
-    val localLlmModelId: Flow<String> = dataStore.data.map { it[LOCAL_LLM_MODEL_ID] ?: "gemma4_e2b" }
+    val defaultLocalLlmModelId: String
+        get() = com.noteflowai.app.data.llm.AvailableModels.getDefault(context).id.id
+
+    val localLlmModelId: Flow<String> = dataStore.data.map { it[LOCAL_LLM_MODEL_ID] ?: defaultLocalLlmModelId }
     val localLlmModelIdBlocking: String
-        get() = runBlocking { dataStore.data.first()[LOCAL_LLM_MODEL_ID] ?: "gemma4_e2b" }
+        get() = runBlocking { dataStore.data.first()[LOCAL_LLM_MODEL_ID] ?: defaultLocalLlmModelId }
 
     suspend fun setLocalLlmModelId(modelId: String) {
         dataStore.edit { it[LOCAL_LLM_MODEL_ID] = modelId }
@@ -887,7 +890,7 @@ class SettingsManager(
             }
         }
 
-        val activeLocalModelId = p[LOCAL_LLM_MODEL_ID] ?: "gemma4_e2b"
+        val activeLocalModelId = p[LOCAL_LLM_MODEL_ID] ?: defaultLocalLlmModelId
         val localModelInfo = com.noteflowai.app.data.llm.AvailableModels.get(com.noteflowai.app.data.llm.ModelId.fromId(activeLocalModelId))
         val localModelName = localModelInfo.name
 

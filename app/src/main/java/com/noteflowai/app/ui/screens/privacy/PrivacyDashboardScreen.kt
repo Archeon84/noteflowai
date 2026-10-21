@@ -1,6 +1,8 @@
 package com.noteflowai.app.ui.screens.privacy
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -181,6 +183,46 @@ fun PrivacyDashboardScreen(
                             checked = isLocalOnlyMode,
                             onCheckedChange = { viewModel.setLocalOnlyMode(it) }
                         )
+                    }
+                }
+            }
+
+            // Privacy Policy & Legal Transparency Card
+            val privacyPolicyUrl = stringResource(R.string.privacy_policy_url)
+            Card(
+                shape = RoundedCornerShape(AppRadius.large),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(AppSpacing.md), verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                    Text(
+                        text = stringResource(R.string.privacy_policy_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.privacy_policy_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Could not open browser", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(AppSpacing.xs))
+                        Text(stringResource(R.string.privacy_policy_title))
                     }
                 }
             }

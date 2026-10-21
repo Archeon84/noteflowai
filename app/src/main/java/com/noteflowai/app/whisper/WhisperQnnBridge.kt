@@ -197,6 +197,7 @@ class WhisperQnnBridge(private val context: Context) {
                         Log.i(TAG, "Encoder warm-up done")
 
                         // Warm-up decoder with a single step using the encoder output
+                        val warmupDecInputs = mutableMapOf<String, OnnxTensor>()
                         try {
                             val warmupDecInputIds = longArrayOf(50258, 50259, 50359, 50363)
                             val warmupDecInputTensor = OnnxTensor.createTensor(
@@ -209,7 +210,6 @@ class WhisperQnnBridge(private val context: Context) {
                                 FloatBuffer.wrap(encHiddenForWarmup),
                                 encHiddenShapeForWarmup
                             )
-                            val warmupDecInputs = mutableMapOf<String, OnnxTensor>()
                             warmupDecInputs[decInputIdsName] = warmupDecInputTensor
                             warmupDecInputs[decEncHiddenName] = warmupEncHiddenTensor
                             if (decUseCacheName.isNotEmpty() && decInputNames.contains(decUseCacheName)) {
@@ -226,6 +226,8 @@ class WhisperQnnBridge(private val context: Context) {
                             Log.i(TAG, "Decoder warm-up done")
                         } catch (e: Exception) {
                             Log.w(TAG, "Decoder warm-up failed (non-fatal): ${e.message}")
+                        } finally {
+                            warmupDecInputs.values.forEach { runCatching { it.close() } }
                         }
 
                         val warmupElapsed = (System.nanoTime() - warmupStart) / 1_000_000.0
@@ -540,29 +542,36 @@ class WhisperQnnBridge(private val context: Context) {
 
             val offset = (seqLen - 1) * vocabSize
 
-            // Repetition penalty: reduce logits of recently-used tokens to break loops
+            // Repetition penalty: reduce probability of recently-used tokens to break loops
             if (allTokens.size >= 4) {
                 val recentWindow = allTokens.takeLast(REPETITION_PENALTY_WINDOW)
                 for (recentToken in recentWindow) {
                     if (recentToken in 0 until vocabSize) {
-                        logits[offset + recentToken] *= REPETITION_PENALTY_FACTOR
+                        val currentLogit = logits[offset + recentToken]
+                        logits[offset + recentToken] = if (currentLogit >= 0f) {
+                            currentLogit * REPETITION_PENALTY_FACTOR
+                        } else {
+                            currentLogit / REPETITION_PENALTY_FACTOR
+                        }
                     }
                 }
             }
 
             // no_speech_prob check at step 0: probability of <|nospeech|> token
-            // Use proper softmax over top-K tokens + no_speech token for accurate probability
+            // Use proper softmax over top-10 highest logits + no_speech token for accurate probability
             if (step == 0 && TOKEN_NOSPEECH < vocabSize) {
                 val nospeechLogit = logits[offset + TOKEN_NOSPEECH]
-                // Collect top-10 logits + no_speech logit for softmax denominator
-                val topLogits = mutableListOf(nospeechLogit)
+                // Collect top-10 highest non-nospeech logits across the vocabulary
+                val top10 = FloatArray(10) { Float.NEGATIVE_INFINITY }
                 for (i in 0 until vocabSize) {
-                    if (i != TOKEN_NOSPEECH && topLogits.size < 11) {
-                        topLogits.add(logits[offset + i])
+                    if (i == TOKEN_NOSPEECH) continue
+                    val v = logits[offset + i]
+                    if (v > top10[0]) {
+                        top10[0] = v
+                        top10.sort()
                     }
                 }
-                // Sort and keep only top-10 non-nospeech for denominator
-                val sortedTop = topLogits.filter { it != nospeechLogit }.sorted().take(10)
+                val sortedTop = top10.filter { it.isFinite() }
                 val maxForStability = maxOf(nospeechLogit, sortedTop.maxOrNull() ?: nospeechLogit)
                 var expSum = kotlin.math.exp((nospeechLogit - maxForStability).toDouble()).toFloat()
                 for (v in sortedTop) {
@@ -772,10 +781,6 @@ class WhisperQnnBridge(private val context: Context) {
 
             allTokens.add(best)
             if (best != TOKEN_EOT) inputBuffer[inputLen++] = best.toLong()
-            if (inputLen > 448) {
-                Log.w(TAG, "Input sequence too long, stopping")
-                break
-            }
 
             if (step < 5) {
                 val top5 = logits.slice(offset until offset + vocabSize).mapIndexed { idx, v -> idx to v }
@@ -785,6 +790,11 @@ class WhisperQnnBridge(private val context: Context) {
 
             inputs.values.forEach { it.close() }
             results.close()
+
+            if (inputLen > 448) {
+                Log.w(TAG, "Input sequence too long, stopping")
+                break
+            }
 
             // Yield every 10 steps to prevent thread starvation on long recordings
             if (step % 10 == 0) {
@@ -1008,17 +1018,16 @@ class WhisperQnnBridge(private val context: Context) {
         isReleasing = true
         // Capture fields locally so we close exactly what we saw, even if
         // another thread nulls them in between.
+        // Do NOT close the process-wide OrtEnvironment singleton (env).
         val enc = encoderSession
         val dec = decoderSession
         val dEnc = draftEncoderSession
         val dDec = draftDecoderSession
-        val e = env
         try {
             enc?.close()
             dec?.close()
             dEnc?.close()
             dDec?.close()
-            e?.close()
         } catch (e: Exception) {
             Log.e(TAG, "Release error", e)
         }

@@ -62,7 +62,7 @@ class GoogleDriveManager(private val context: Context) {
             if (account != null && account.email != null) {
                 val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 prefs.edit().putString(KEY_ACCOUNT_EMAIL, account.email).apply()
-                Log.i(TAG, "Signed in as ${account.email}")
+                Log.i(TAG, "Google Drive sign-in succeeded")
                 true
             } else {
                 Log.w(TAG, "Sign-in succeeded but no account")
@@ -147,7 +147,16 @@ class GoogleDriveManager(private val context: Context) {
             val latest = files[0]
             val backupDir = File(context.getExternalFilesDir(null), "NoteFlowAI_Backup")
             backupDir.mkdirs()
-            val destFile = File(backupDir, latest.name)
+            val safeFileName = (latest.name ?: "NoteFlowAI_Backup.zip")
+                .replace(Regex("[/\\\\]"), "_")
+                .replace("..", "_")
+                .take(200)
+            val destFile = File(backupDir, safeFileName)
+            val dirPath = backupDir.canonicalPath
+            val filePath = destFile.canonicalPath
+            if (filePath != dirPath && !filePath.startsWith(dirPath + File.separator)) {
+                return@withContext DriveDownloadResult(false, "Invalid backup filename")
+            }
 
             drive.files().get(latest.id).executeMediaAsInputStream().use { input ->
                 FileOutputStream(destFile).use { output ->
@@ -155,8 +164,8 @@ class GoogleDriveManager(private val context: Context) {
                 }
             }
 
-            Log.i(TAG, "Downloaded: ${latest.name} (${latest.size} bytes)")
-            DriveDownloadResult(true, "Downloaded from Google Drive: ${latest.name}", destFile)
+            Log.i(TAG, "Downloaded: $safeFileName (${latest.size} bytes)")
+            DriveDownloadResult(true, "Downloaded from Google Drive: $safeFileName", destFile)
         } catch (e: Exception) {
             Log.e(TAG, "Download failed", e)
             DriveDownloadResult(false, "Download failed: ${e.message}")

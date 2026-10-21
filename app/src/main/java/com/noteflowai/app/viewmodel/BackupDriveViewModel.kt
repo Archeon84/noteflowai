@@ -28,9 +28,9 @@ class BackupDriveViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private val settingsManager = SettingsManager.getInstance(application)
-    private val noteRepository = NoteRepository(application)
-    private val recordingRepository = RecordingRepository(application)
-    private val chatRepository = ChatRepository(application)
+    private val noteRepository = NoteRepository.getInstance(application)
+    private val recordingRepository = RecordingRepository.getInstance(application)
+    private val chatRepository = ChatRepository.getInstance(application)
     private val backupManager = BackupManager(application)
     private val googleDriveManager = GoogleDriveManager(application)
 

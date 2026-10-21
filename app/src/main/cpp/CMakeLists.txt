@@ -4,13 +4,13 @@ project("whisper_jni")
 # Ensure 16KB page alignment for Android 15+
 add_link_options("-Wl,-z,max-page-size=16384")
 
-# Force Release-level optimizations and ARM SIMD flags for ALL native targets
-# (ggml-base, ggml-cpu, llama, whisper all need this)
+# Use baseline armv8-a so libwhisper_jni.so does not crash with SIGILL on
+# mass-market ARMv8.0 / ARMv8.2 devices lacking dotprod or i8mm.
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8.4-a+dotprod+fp16+i8mm -O3" CACHE STRING "" FORCE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8.4-a+dotprod+fp16+i8mm -O3" CACHE STRING "" FORCE)
-    set(GGML_CPU_ARM_ARCH "armv8.4-a+dotprod+fp16+i8mm" CACHE STRING "" FORCE)
-    set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8-a -O3" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a -O3" CACHE STRING "" FORCE)
+    set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "" FORCE)
+    set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 endif()
 
 # LTO disabled - gold linker not available in Android NDK on Windows

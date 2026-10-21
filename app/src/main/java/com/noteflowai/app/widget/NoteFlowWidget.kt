@@ -27,6 +27,7 @@ class NoteFlowWidget : AppWidgetProvider() {
             for (id in ids) {
                 updateWidget(context, mgr, id)
             }
+            mgr.notifyAppWidgetViewDataChanged(ids, R.id.widgetNotesList)
         }
     }
 

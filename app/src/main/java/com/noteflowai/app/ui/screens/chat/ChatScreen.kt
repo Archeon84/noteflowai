@@ -159,9 +159,9 @@ fun ChatScreen(
         showAttachmentMenu = false
     }
 
-    LaunchedEffect(messages.size, isTyping) {
-        if (messages.isNotEmpty()) {
-            val lastIndex = messages.size - 1
+    LaunchedEffect(effectiveMessages.size, isTyping) {
+        if (effectiveMessages.isNotEmpty()) {
+            val lastIndex = effectiveMessages.size - 1
             val isNearBottom = listState.firstVisibleItemIndex >= lastIndex - 2
             if (isNearBottom) {
                 listState.animateScrollToItem(lastIndex)
@@ -516,14 +516,16 @@ fun ChatScreen(
                     }
                     val showJumpButton by remember {
                         derivedStateOf {
-                            messages.isNotEmpty() && listState.firstVisibleItemIndex < messages.size - 3
+                            effectiveMessages.isNotEmpty() && listState.firstVisibleItemIndex < effectiveMessages.size - 3
                         }
                     }
                     if (showJumpButton) {
                         Box(modifier = Modifier.align(Alignment.BottomEnd).padding(AppSpacing.sm)) {
                             FloatingActionButton(
                                 onClick = {
-                                    scope.launch { listState.animateScrollToItem(messages.size - 1) }
+                                    if (effectiveMessages.isNotEmpty()) {
+                                        scope.launch { listState.animateScrollToItem(effectiveMessages.size - 1) }
+                                    }
                                 },
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 modifier = Modifier.size(48.dp)
@@ -917,7 +919,7 @@ fun AiConfigDialog(
 
     // Local LLM observation
     val downloadedModels by viewModel.downloadedLocalModels.collectAsStateWithLifecycle()
-    val activeModelId by viewModel.activeLocalLlmModelId.collectAsStateWithLifecycle(initialValue = "gemma4_e2b")
+    val activeModelId by viewModel.activeLocalLlmModelId.collectAsStateWithLifecycle(initialValue = viewModel.defaultLocalLlmModelId)
     val isLlamaDownloading by viewModel.isLlamaInferenceDownloading.collectAsStateWithLifecycle()
     val llamaProgress by viewModel.llamaInferenceDownloadProgress.collectAsStateWithLifecycle()
     val downloadingModelId by viewModel.downloadingLocalModelId.collectAsStateWithLifecycle()
@@ -1011,7 +1013,7 @@ fun AiConfigDialog(
                             selectedTab = 0
                             tempProvider = "Local"
                             tempBaseUrl = "local"
-                            val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.GEMMA_4_E2B
+                            val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.getDefault(context)
                             tempModel = activeModel.name
                         },
                         text = {
@@ -1128,6 +1130,22 @@ fun AiConfigDialog(
                                                         text = stringResource(R.string.settings_badge_active),
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        maxLines = 1,
+                                                        softWrap = false
+                                                    )
+                                                }
+                                            }
+                                            if (modelInfo == AvailableModels.getDefault(context)) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Recommended",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                                         maxLines = 1,
                                                         softWrap = false
@@ -1648,7 +1666,7 @@ fun AiConfigDialog(
                     tempProvider = "Local"
                     tempApiKey = ""
                     tempBaseUrl = "local"
-                    val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.GEMMA_4_E2B
+                    val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.getDefault(context)
                     tempModel = activeModel.name
                     tempPrompt = ""
                     tempTemp = 0.7f
@@ -1740,12 +1758,15 @@ fun ChatBubble(
     if (!isUser && message.toolCalls?.isNotEmpty() == true) {
         val createNoteCall = message.toolCalls.find { it.function.name == "create_note" }
         if (createNoteCall != null) {
-            val args = com.google.gson.Gson().fromJson(
-                createNoteCall.function.arguments, com.google.gson.JsonObject::class.java
-            )
-            val title = args?.get("title")?.asString ?: "Note"
-            val category = args?.get("category")?.asString ?: "All"
-            val contentPreview = args?.get("content")?.asString?.take(200) ?: ""
+            val args = runCatching {
+                com.google.gson.Gson().fromJson(
+                    createNoteCall.function.arguments, com.google.gson.JsonObject::class.java
+                )
+            }.getOrNull()
+            val title = runCatching { args?.get("title")?.asString }.getOrNull() ?: "Note"
+            val category = runCatching { args?.get("category")?.asString }.getOrNull() ?: "All"
+            val fullContent = runCatching { args?.get("content")?.asString }.getOrNull() ?: ""
+            val contentPreview = fullContent.take(200)
             val isPending = pendingToolCallId == createNoteCall.id
 
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
@@ -1784,7 +1805,7 @@ fun ChatBubble(
                         if (contentPreview.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(AppSpacing.xs))
                             Text(
-                                text = contentPreview + if (args?.get("content")?.asString?.length ?: 0 > 200) "..." else "",
+                                text = contentPreview + if (fullContent.length > 200) "..." else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 maxLines = 3,

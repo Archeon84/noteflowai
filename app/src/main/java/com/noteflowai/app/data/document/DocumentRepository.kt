@@ -66,7 +66,7 @@ class DocumentRepository(private val context: Context) {
         return importerRegistry.inspect(input)
     }
 
-    suspend fun extractText(uri: Uri, mimeType: String): ExtractResult {
+    suspend fun extractText(uri: Uri, mimeType: String): ExtractResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val text = when (mimeType) {
             MIME_PDF -> extractPdfText(uri)
             MIME_DOCX -> extractDocxText(uri)
@@ -88,17 +88,16 @@ class DocumentRepository(private val context: Context) {
             charCount = text.length
         )
 
-        return ExtractResult(text = text, metadata = metadata)
+        ExtractResult(text = text, metadata = metadata)
     }
 
     private fun extractPdfText(uri: Uri): String {
         return try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val document = PDDocument.load(inputStream)
-                val stripper = PDFTextStripper()
-                val text = stripper.getText(document)
-                document.close()
-                text
+                PDDocument.load(inputStream).use { document ->
+                    val stripper = PDFTextStripper()
+                    stripper.getText(document)
+                }
             } ?: throw IllegalArgumentException("Cannot open PDF file")
         } catch (e: Exception) {
             Log.e(TAG, "PDF extraction failed: ${e.message}", e)
@@ -109,10 +108,23 @@ class DocumentRepository(private val context: Context) {
     private fun extractDocxText(uri: Uri): String {
         return try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val document = XWPFDocument(inputStream)
-                val text = document.paragraphs.joinToString("\n") { it.text }
-                document.close()
-                text
+                XWPFDocument(inputStream).use { document ->
+                    val sb = StringBuilder()
+                    document.paragraphs?.forEach { p ->
+                        if (!p.text.isNullOrBlank()) {
+                            sb.append(p.text).append("\n")
+                        }
+                    }
+                    document.tables?.forEach { table ->
+                        table.rows?.forEach { row ->
+                            val rowText = row.tableCells?.joinToString(" | ") { it.text.trim() }
+                            if (!rowText.isNullOrBlank()) {
+                                sb.append(rowText).append("\n")
+                            }
+                        }
+                    }
+                    sb.toString().trim()
+                }
             } ?: throw IllegalArgumentException("Cannot open DOCX file")
         } catch (e: Exception) {
             Log.e(TAG, "DOCX extraction failed: ${e.message}", e)

@@ -7,6 +7,7 @@ import android.widget.RemoteViewsService
 import com.noteflowai.app.R
 import com.noteflowai.app.data.NoteFile
 import com.noteflowai.app.data.NoteRepository
+import com.noteflowai.app.data.displayTitle
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -39,7 +40,7 @@ class NoteWidgetListProvider(
         val note = notes[position]
 
         return RemoteViews(context.packageName, R.layout.widget_list_item).apply {
-            setTextViewText(R.id.widgetNoteTitle, note.fileName)
+            setTextViewText(R.id.widgetNoteTitle, note.displayTitle)
             setTextViewText(R.id.widgetNotePreview, note.preview)
             setViewVisibility(R.id.widgetNotePin, if (note.pinned) android.view.View.VISIBLE else android.view.View.GONE)
 
@@ -47,7 +48,9 @@ class NoteWidgetListProvider(
             val fillIntent = Intent().apply {
                 putExtra(EXTRA_NOTE_FILE_NAME, note.fileName)
             }
+            setOnClickFillInIntent(R.id.widgetNoteItemRoot, fillIntent)
             setOnClickFillInIntent(R.id.widgetNoteTitle, fillIntent)
+            setOnClickFillInIntent(R.id.widgetNotePreview, fillIntent)
         }
     }
 
@@ -60,7 +63,7 @@ class NoteWidgetListProvider(
     override fun hasStableIds(): Boolean = true
 
     private fun loadNotes() {
-        val repo = NoteRepository(context)
+        val repo = NoteRepository.getInstance(context)
         runBlocking { repo.refreshNotesList() }
         val allNotes = repo.notesFlow.value
 
@@ -71,6 +74,6 @@ class NoteWidgetListProvider(
     }
 
     companion object {
-        const val EXTRA_NOTE_FILE_NAME = "note_file_name"
+        const val EXTRA_NOTE_FILE_NAME = com.noteflowai.app.MainActivity.EXTRA_NOTE_FILE_NAME
     }
 }

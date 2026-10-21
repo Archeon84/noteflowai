@@ -269,7 +269,7 @@ fun AiIntelligenceSection(viewModel: MainViewModel) {
     val llamaProgress by viewModel.llamaInferenceDownloadProgress.collectAsStateWithLifecycle()
     val downloadingModelId by viewModel.downloadingLocalModelId.collectAsStateWithLifecycle()
     val downloadedModels by viewModel.downloadedLocalModels.collectAsStateWithLifecycle()
-    val activeModelId by viewModel.activeLocalLlmModelId.collectAsStateWithLifecycle(initialValue = "gemma4_e2b")
+    val activeModelId by viewModel.activeLocalLlmModelId.collectAsStateWithLifecycle(initialValue = viewModel.defaultLocalLlmModelId)
     val enableLocalLlmFallback by viewModel.enableLocalLlmFallback.collectAsStateWithLifecycle()
 
     var tempProvider by remember(aiProvider) { mutableStateOf(aiProvider) }
@@ -320,7 +320,7 @@ fun AiIntelligenceSection(viewModel: MainViewModel) {
                         engineTab = 0
                         tempProvider = "Local"
                         tempBaseUrl = "local"
-                        val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.GEMMA_4_E2B
+                        val activeModel = AvailableModels.ALL.firstOrNull { it.id.id == activeModelId } ?: AvailableModels.getDefault(context)
                         tempModel = activeModel.name
                         viewModel.updateAiConfig(
                             tempProvider, "", tempBaseUrl, tempModel, tempPrompt,
@@ -427,6 +427,22 @@ fun AiIntelligenceSection(viewModel: MainViewModel) {
                                                     stringResource(R.string.settings_badge_active),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            }
+                                        }
+                                        if (modelInfo == AvailableModels.getDefault(context)) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                shape = RoundedCornerShape(AppRadius.small)
+                                            ) {
+                                                Text(
+                                                    "Recommended",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                                     maxLines = 1,
                                                     softWrap = false

@@ -190,7 +190,7 @@ $slideRels
     private fun appXml(title: String) = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
   <Application>NoteFlow AI</Application>
-  <Title>$title</Title>
+  <Title>${escapeXml(title)}</Title>
   <Company>NoteFlow</Company>
 </Properties>"""
 
@@ -199,7 +199,7 @@ $slideRels
   xmlns:dc="http://purl.org/dc/elements/1.1/"
   xmlns:dcterms="http://purl.org/dc/terms/"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>$title</dc:title>
+  <dc:title>${escapeXml(title)}</dc:title>
   <dc:creator>NoteFlow AI</dc:creator>
 </cp:coreProperties>"""
 
@@ -208,6 +208,7 @@ $slideRels
     private fun slideXml(slide: SlideData, slideNum: Int): String {
         val contentElements = buildString {
             var yPos = 1500000L
+            var nextShapeId = 3
 
             // Title
             appendLine("""  <p:sp>
@@ -224,31 +225,35 @@ $slideRels
                 for (block in slide.content) {
                     when (block) {
                         is SlideBlock.Bullet -> {
+                            val shapeId = nextShapeId++
                             appendLine("""  <p:sp>
-    <p:nvSpPr><p:cNvPr id="${slideNum * 100 + 10}" name="Text" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
+    <p:nvSpPr><p:cNvPr id="$shapeId" name="Text $shapeId" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
     <p:txBody><a:bodyPr /><a:lstStyle /><a:p><a:pPr algn="l" /><a:r><a:rPr lang="en-US" dirty="0" sz="1800" /><a:t>${escapeXml(block.text)}</a:t></a:r><a:endParaRPr lang="en-US" dirty="0" /></a:p></p:txBody>
   </p:sp>""")
                             yPos += 400000L
                         }
                         is SlideBlock.Code -> {
+                            val shapeId = nextShapeId++
                             appendLine("""  <p:sp>
-    <p:nvSpPr><p:cNvPr id="${slideNum * 100 + 20}" name="Code" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="500000" /></a:xfrm><a:solidFill><a:srgbClr val="F5F5F5" /></a:solidFill><a:ln><a:solidFill><a:srgbClr val="DDDDDD" /></a:solidFill></a:ln></p:spPr>
+    <p:nvSpPr><p:cNvPr id="$shapeId" name="Code $shapeId" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="500000" /></a:xfrm><a:solidFill><a:srgbClr val="F5F5F5" /></a:solidFill><a:ln><a:solidFill><a:srgbClr val="DDDDDD" /></a:solidFill></a:ln></p:spPr>
     <p:txBody><a:bodyPr /><a:lstStyle /><a:p><a:pPr algn="l" /><a:r><a:rPr lang="en-US" dirty="0" sz="1400" /><a:rFonts a:ascii="Courier New" a:hAnsi="Courier New" /><a:t>${escapeXml(block.code.take(200))}</a:t></a:r><a:endParaRPr lang="en-US" dirty="0" /></a:p></p:txBody>
   </p:sp>""")
                             yPos += 550000L
                         }
                         is SlideBlock.Table -> {
+                            val headerShapeId = nextShapeId++
                             val headerLine = block.headers.joinToString(" | ")
                             appendLine("""  <p:sp>
-    <p:nvSpPr><p:cNvPr id="${slideNum * 100 + 30}" name="TableHeader" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm><a:solidFill><a:srgbClr val="E8E8E8" /></a:solidFill></p:spPr>
+    <p:nvSpPr><p:cNvPr id="$headerShapeId" name="TableHeader $headerShapeId" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm><a:solidFill><a:srgbClr val="E8E8E8" /></a:solidFill></p:spPr>
     <p:txBody><a:bodyPr /><a:lstStyle /><a:p><a:pPr algn="l" /><a:r><a:rPr lang="en-US" dirty="0" sz="1600" b="1" /><a:t>${escapeXml(headerLine)}</a:t></a:r><a:endParaRPr lang="en-US" dirty="0" /></a:p></p:txBody>
   </p:sp>""")
                             yPos += 380000L
 
                             for (row in block.rows) {
+                                val rowShapeId = nextShapeId++
                                 val rowLine = row.joinToString(" | ")
                                 appendLine("""  <p:sp>
-    <p:nvSpPr><p:cNvPr id="${slideNum * 100 + 40}" name="TableRow" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
+    <p:nvSpPr><p:cNvPr id="$rowShapeId" name="TableRow $rowShapeId" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
     <p:txBody><a:bodyPr /><a:lstStyle /><a:p><a:pPr algn="l" /><a:r><a:rPr lang="en-US" dirty="0" sz="1400" /><a:t>${escapeXml(rowLine)}</a:t></a:r><a:endParaRPr lang="en-US" dirty="0" /></a:p></p:txBody>
   </p:sp>""")
                                 yPos += 350000L
@@ -259,8 +264,9 @@ $slideRels
             } else {
                 // Simple mode: render bullets
                 for (bullet in slide.bullets) {
+                    val shapeId = nextShapeId++
                     appendLine("""  <p:sp>
-    <p:nvSpPr><p:cNvPr id="${slideNum * 100 + 10}" name="Text" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
+    <p:nvSpPr><p:cNvPr id="$shapeId" name="Text $shapeId" /><p:nvPr /></p:nvSpPr><p:spPr><a:xfrm><a:off x="571500" y="$yPos" /><a:ext cx="7874000" cy="342900" /></a:xfrm></p:spPr>
     <p:txBody><a:bodyPr /><a:lstStyle /><a:p><a:pPr algn="l" /><a:r><a:rPr lang="en-US" dirty="0" sz="1800" /><a:t>${escapeXml(bullet)}</a:t></a:r><a:endParaRPr lang="en-US" dirty="0" /></a:p></p:txBody>
   </p:sp>""")
                     yPos += 400000L
