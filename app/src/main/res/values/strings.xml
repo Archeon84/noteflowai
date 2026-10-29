@@ -483,7 +483,7 @@
     <!-- Document Screen -->
     <string name="document_title">Document Import</string>
     <string name="document_pick_button">Import Document</string>
-    <string name="document_pick_helper">Import PDF, DOCX, TXT, or HTML files to extract and summarize their text.</string>
+    <string name="document_pick_helper">Import PDF, DOCX, TXT, HTML, or Audio files to extract and summarize their text.</string>
     <string name="document_extracting">Extracting textâ€¦</string>
     <string name="document_word_count">%d words</string>
     <string name="document_extracted_title">Extracted Text</string>
@@ -492,10 +492,10 @@
     <string name="document_summarizing">Summarizingâ€¦</string>
     <string name="document_save_text_button">Save Text</string>
     <string name="document_save_summary_button">Save as Note</string>
-    <string name="document_empty_hint">Import a document to extract and summarize its text</string>
+    <string name="document_empty_hint">Import a document or audio file to extract and summarize its text</string>
     <string name="document_empty_action">Import Document</string>
     <string name="document_actions_label">Actions</string>
-    <string name="document_unsupported_format">Unsupported file format. Supported: PDF, DOCX, TXT, HTML.</string>
+    <string name="document_unsupported_format">Unsupported file format. Supported: PDF, DOCX, TXT, HTML, Audio.</string>
     <string name="document_desc_back">Back</string>
     <string name="document_desc_refresh">Refresh</string>
     <string name="document_desc_copy">Copy</string>

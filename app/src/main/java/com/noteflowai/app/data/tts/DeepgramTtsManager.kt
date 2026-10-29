@@ -82,16 +82,20 @@ class DeepgramTtsManager(
          *  request a connection that previously carried the Deepgram transcription WebSocket, and
          *  HTTP/2 streamed MP3 downloads get reset by network middleboxes (observed as "stream was
          *  reset: CANCEL"). HTTP/1.1 with chunked transfer avoids both. */
-        fun sharedDeepgramClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .protocols(listOf(Protocol.HTTP_1_1))
-            .apply {
-                // Enforce Local-Only Mode even on this dedicated transport.
-                com.noteflowai.app.data.NetworkModule.firewallInterceptor()?.let { addInterceptor(it) }
-            }
-            .build()
+        private val sharedHttp1Client: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .protocols(listOf(Protocol.HTTP_1_1))
+                .apply {
+                    // Enforce Local-Only Mode even on this dedicated transport.
+                    com.noteflowai.app.data.NetworkModule.firewallInterceptor()?.let { addInterceptor(it) }
+                }
+                .build()
+        }
+
+        fun sharedDeepgramClient(): OkHttpClient = sharedHttp1Client
     }
 
     private data class SpeakRequest(val text: String)
@@ -121,7 +125,7 @@ class DeepgramTtsManager(
     override suspend fun play(itemId: String, text: String) {
         val clean = text.trim()
         val gen = machine.newPlay(itemId)
-        val key = keyProvider().trim()
+        val key = withContext(Dispatchers.IO) { keyProvider().trim() }
         if (clean.isBlank()) {
             machine.idle()
             return
@@ -153,6 +157,10 @@ class DeepgramTtsManager(
                 // stop() cancelled us; state was already resolved by stop().
             } catch (e: Exception) {
                 if (machine.isCurrent(gen)) machine.failed("playback_error")
+            } finally {
+                if (machine.isCurrent(gen)) {
+                    focus?.abandonFocus()
+                }
             }
         }
     }

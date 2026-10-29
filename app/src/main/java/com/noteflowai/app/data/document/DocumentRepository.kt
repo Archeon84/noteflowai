@@ -33,19 +33,42 @@ class DocumentRepository(private val context: Context) {
         const val MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         const val MIME_TEXT = "text/plain"
         const val MIME_HTML = "text/html"
+        const val MIME_AUDIO_WAV = "audio/wav"
+        const val MIME_AUDIO_XWAV = "audio/x-wav"
+        const val MIME_AUDIO_MP3 = "audio/mpeg"
+        const val MIME_AUDIO_MP4 = "audio/mp4"
+        const val MIME_AUDIO_M4A = "audio/m4a"
+        const val MIME_AUDIO_XM4A = "audio/x-m4a"
+        const val MIME_AUDIO_AAC = "audio/aac"
+        const val MIME_AUDIO_OGG = "audio/ogg"
+        const val MIME_AUDIO_FLAC = "audio/flac"
 
         fun getSupportedMimeTypes(): Array<String> = arrayOf(
             MIME_PDF,
             MIME_DOCX,
             MIME_TEXT,
-            MIME_HTML
+            MIME_HTML,
+            MIME_AUDIO_WAV,
+            MIME_AUDIO_XWAV,
+            MIME_AUDIO_MP3,
+            MIME_AUDIO_MP4,
+            MIME_AUDIO_M4A,
+            MIME_AUDIO_XM4A,
+            MIME_AUDIO_AAC,
+            MIME_AUDIO_OGG,
+            MIME_AUDIO_FLAC
         )
 
-        fun getFormatLabel(mimeType: String): String = when (mimeType) {
-            MIME_PDF -> "PDF"
-            MIME_DOCX -> "DOCX"
-            MIME_TEXT -> "TXT"
-            MIME_HTML -> "HTML"
+        fun isSupportedMimeType(mimeType: String): Boolean {
+            return mimeType in getSupportedMimeTypes() || mimeType.startsWith("audio/")
+        }
+
+        fun getFormatLabel(mimeType: String): String = when {
+            mimeType == MIME_PDF -> "PDF"
+            mimeType == MIME_DOCX -> "DOCX"
+            mimeType == MIME_TEXT -> "TXT"
+            mimeType == MIME_HTML -> "HTML"
+            mimeType.startsWith("audio/") -> "Audio"
             else -> "Unknown"
         }
     }
@@ -67,11 +90,13 @@ class DocumentRepository(private val context: Context) {
     }
 
     suspend fun extractText(uri: Uri, mimeType: String): ExtractResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val text = when (mimeType) {
-            MIME_PDF -> extractPdfText(uri)
-            MIME_DOCX -> extractDocxText(uri)
-            MIME_TEXT -> extractPlainText(uri)
-            MIME_HTML -> extractHtmlText(uri)
+        val fileName = getFileName(uri)
+        val text = when {
+            mimeType == MIME_PDF -> extractPdfText(uri)
+            mimeType == MIME_DOCX -> extractDocxText(uri)
+            mimeType == MIME_TEXT -> extractPlainText(uri)
+            mimeType == MIME_HTML -> extractHtmlText(uri)
+            mimeType.startsWith("audio/") -> extractAudioText(uri, mimeType, fileName)
             else -> throw IllegalArgumentException("Unsupported format: $mimeType")
         }
 
@@ -79,7 +104,6 @@ class DocumentRepository(private val context: Context) {
             throw IllegalArgumentException("File appears to be empty or corrupted")
         }
 
-        val fileName = getFileName(uri)
         val wordCount = text.split(Regex("\\s+")).filter { it.isNotBlank() }.size
         val metadata = DocumentMetadata(
             fileName = fileName,
@@ -89,6 +113,20 @@ class DocumentRepository(private val context: Context) {
         )
 
         ExtractResult(text = text, metadata = metadata)
+    }
+
+    private suspend fun extractAudioText(uri: Uri, mimeType: String, fileName: String): String {
+        val result = com.noteflowai.app.data.importer.AudioImporter(context).import(
+            com.noteflowai.app.data.importer.ImportInput(
+                uri = uri,
+                mimeType = mimeType,
+                title = fileName
+            )
+        )
+        return when (result) {
+            is com.noteflowai.app.data.importer.ImportResult.Success -> result.text
+            is com.noteflowai.app.data.importer.ImportResult.Failure -> throw IllegalArgumentException(result.rawMessage)
+        }
     }
 
     private fun extractPdfText(uri: Uri): String {

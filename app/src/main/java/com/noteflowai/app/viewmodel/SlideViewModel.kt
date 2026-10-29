@@ -135,7 +135,7 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
                     val provider = settingsManager.aiProvider.first()
                     val apiKey = settingsManager.aiApiKey.first()
                     val baseUrl = settingsManager.aiBaseUrl.first()
-                    val needsApiKey = provider !in listOf("Ollama", "LM Studio")
+                    val needsApiKey = provider !in listOf("Ollama", "LM Studio", "Local", "Local (On-Device)")
 
                     if (needsApiKey && apiKey.isBlank()) {
                         withContext(Dispatchers.Main) { _errorMessage.value = "No offline AI available and no API key configured." }
@@ -209,29 +209,34 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
 
             val bullets = mutableListOf<String>()
             val contentBlocks = mutableListOf<SlideBlock>()
+            val slideLines = contentText.lines()
+            var lineIdx = 0
 
-            for (line in contentText.lines()) {
-                val trimmed = line.trim()
-                if (trimmed.isBlank()) continue
+            while (lineIdx < slideLines.size) {
+                val trimmed = slideLines[lineIdx].trim()
+                if (trimmed.isBlank()) {
+                    lineIdx++
+                    continue
+                }
 
                 when {
                     trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
-                        bullets.add(trimmed.removePrefix("- ").removePrefix("* ").trim())
-                        contentBlocks.add(SlideBlock.Bullet(trimmed.removePrefix("- ").removePrefix("* ").trim()))
+                        val bulletText = trimmed.removePrefix("- ").removePrefix("* ").trim()
+                        bullets.add(bulletText)
+                        contentBlocks.add(SlideBlock.Bullet(bulletText))
+                        lineIdx++
                     }
                     trimmed.startsWith("```") -> {
                         val codeLines = mutableListOf<String>()
-                        val codeStart = trimmed.removePrefix("```")
-                        if (codeStart.isNotBlank()) codeLines.add(codeStart)
-                        var j = i + 1
-                        while (j < matches.size) {
-                            val nextContent = aiOutput.substringAfter(matches[j - 1].value)
-                                .substringBefore(if (j < matches.size) matches[j].value else "###END###")
-                            for (codeLine in nextContent.lines()) {
-                                if (codeLine.trim() == "```") break
-                                codeLines.add(codeLine)
+                        lineIdx++
+                        while (lineIdx < slideLines.size) {
+                            val codeLine = slideLines[lineIdx]
+                            if (codeLine.trim().startsWith("```")) {
+                                lineIdx++
+                                break
                             }
-                            break
+                            codeLines.add(codeLine)
+                            lineIdx++
                         }
                         contentBlocks.add(SlideBlock.Code(codeLines.joinToString("\n")))
                     }
@@ -240,12 +245,14 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
                         if (cells.isNotEmpty()) {
                             contentBlocks.add(SlideBlock.Table(cells, emptyList()))
                         }
+                        lineIdx++
                     }
                     else -> {
                         if (trimmed.isNotBlank()) {
                             bullets.add(trimmed)
                             contentBlocks.add(SlideBlock.Bullet(trimmed))
                         }
+                        lineIdx++
                     }
                 }
             }
@@ -272,9 +279,10 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val safeTitle = title.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Presentation" }
                 val cacheDir = File(context.cacheDir, "exports")
                 cacheDir.mkdirs()
-                val pptxFile = File(cacheDir, "${title}_slides.pptx")
+                val pptxFile = File(cacheDir, "${safeTitle}_slides.pptx")
                 PptxGenerator.generatePptx(slides, title, pptxFile)
 
                 var savedToDownloads = false
@@ -282,7 +290,7 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
                     @Suppress("DEPRECATION")
                     val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
                     if (downloadsDir.exists() || downloadsDir.mkdirs()) {
-                        val destFile = File(downloadsDir, "${title}_slides.pptx")
+                        val destFile = File(downloadsDir, "${safeTitle}_slides.pptx")
                         pptxFile.copyTo(destFile, overwrite = true)
                         savedToDownloads = true
                         Log.i(TAG, "PPTX saved to: ${destFile.absolutePath}")
@@ -295,11 +303,10 @@ class SlideViewModel(application: Application) : AndroidViewModel(application) {
                     context, "${context.packageName}.fileprovider", pptxFile
                 )
                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/octet-stream"
+                    type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_SUBJECT, "$title.pptx")
+                    putExtra(Intent.EXTRA_SUBJECT, "$safeTitle.pptx")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 }
                 withContext(Dispatchers.Main) {
                     if (savedToDownloads) {

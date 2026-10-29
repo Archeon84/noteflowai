@@ -37,67 +37,86 @@ class RecallReminderReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                createNotificationChannel(context)
-
-                // Load indexes from disk (same pattern as MainViewModel init)
-                val searchIndex = NoteSearchIndex()
-                val extractor = ConceptExtractor(searchIndex)
-                val temporalIndex = TemporalIndex(extractor)
-                val conceptGraph = ConceptGraphRepository(extractor)
-
-                temporalIndex.loadFromDisk(context)
-                conceptGraph.loadFromDisk(context)
-
-                // Find stale concepts
-                val predictor = RecallPredictor(temporalIndex, conceptGraph)
-                val suggestions = predictor.findRecallSuggestions()
-
-                if (suggestions.isEmpty()) return@launch  // nothing to remind about
-
-                // Build notification with top suggestions
-                val topSuggestions = suggestions.take(3)
-                val title = if (topSuggestions.any { it.type == RecallPredictor.RecallType.CONFLICT_DETECTED }) {
-                    "Conflicting notes found"
-                } else {
-                    "Revisit: ${topSuggestions.first().concept}"
-                }
-                val detail = if (topSuggestions.size == 1) {
-                    topSuggestions.first().detail
-                } else {
-                    "${topSuggestions.first().detail} +${topSuggestions.size - 1} more"
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    return@launch
                 }
 
-                val openIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
-                val pendingIntent = PendingIntent.getActivity(
-                    context, 0, openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+                kotlinx.coroutines.withTimeout(8_000L) {
+                    createNotificationChannel(context)
 
-                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_notification_mic)
-                    .setContentTitle(title)
-                    .setContentText(detail)
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .setContentIntent(pendingIntent)
-                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                    .setPublicVersion(
-                        NotificationCompat.Builder(context, CHANNEL_ID)
-                            .setSmallIcon(R.drawable.ic_notification_mic)
-                            .setContentTitle("Recall reminder")
-                            .setContentText("You have ideas to revisit")
-                            .build()
+                    // Load indexes from disk (same pattern as MainViewModel init)
+                    val searchIndex = NoteSearchIndex()
+                    val extractor = ConceptExtractor(searchIndex)
+                    val temporalIndex = TemporalIndex(extractor)
+                    val conceptGraph = ConceptGraphRepository(extractor)
+
+                    temporalIndex.loadFromDisk(context)
+                    conceptGraph.loadFromDisk(context)
+
+                    // Find stale concepts
+                    val predictor = RecallPredictor(temporalIndex, conceptGraph)
+                    val suggestions = predictor.findRecallSuggestions()
+
+                    if (suggestions.isEmpty()) return@withTimeout  // nothing to remind about
+
+                    // Build notification with top suggestions
+                    val topSuggestions = suggestions.take(3)
+                    val title = if (topSuggestions.any { it.type == RecallPredictor.RecallType.CONFLICT_DETECTED }) {
+                        "Conflicting notes found"
+                    } else {
+                        "Revisit: ${topSuggestions.first().concept}"
+                    }
+                    val detail = if (topSuggestions.size == 1) {
+                        topSuggestions.first().detail
+                    } else {
+                        "${topSuggestions.first().detail} +${topSuggestions.size - 1} more"
+                    }
+
+                    val openIntent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val pendingIntent = PendingIntent.getActivity(
+                        context, 0, openIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    .setAutoCancel(true)
-                    .build()
 
-                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                manager.notify(NOTIFICATION_ID, notification)
+                    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_notification_mic)
+                        .setContentTitle(title)
+                        .setContentText(detail)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .setContentIntent(pendingIntent)
+                        .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                        .setPublicVersion(
+                            NotificationCompat.Builder(context, CHANNEL_ID)
+                                .setSmallIcon(R.drawable.ic_notification_mic)
+                                .setContentTitle("Recall reminder")
+                                .setContentText("You have ideas to revisit")
+                                .build()
+                        )
+                        .setAutoCancel(true)
+                        .build()
+
+                    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    manager.notify(NOTIFICATION_ID, notification)
+                }
             } catch (e: Exception) {
                 Log.w("RecallReminderReceiver", "Failed: ${e.message}")
             } finally {
+                runCatching {
+                    val settings = com.noteflowai.app.data.settings.SettingsManager.getInstance(context.applicationContext)
+                    if (settings.recallRemindersEnabledBlocking) {
+                        com.noteflowai.app.data.RecallReminderManager(context.applicationContext).schedule(
+                            com.noteflowai.app.data.RecallReminderManager.ReminderConfig(enabled = true)
+                        )
+                    }
+                }
                 pendingResult.finish()
             }
         }

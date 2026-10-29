@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,22 +71,22 @@ fun NoteFlowApp(
     deepLinkScreen: MutableState<String?>? = null,
     widgetOpenNoteFileName: MutableState<String?>? = null
 ) {
-    var currentScreen by remember { mutableStateOf(Screen.HOME) }
-    var previousScreen by remember { mutableStateOf(Screen.HOME) }
+    var currentScreen by rememberSaveable { mutableStateOf(Screen.HOME) }
+    var previousScreen by rememberSaveable { mutableStateOf(Screen.HOME) }
     val context = LocalContext.current
     val activity = context as ComponentActivity
     val windowSizeClass = calculateWindowSizeClass(activity)
     val isCompact = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
-    var showIntro by remember { mutableStateOf(!IntroPrefs.hasShown(context)) }
-    var showOnboarding by remember {
+    var showIntro by rememberSaveable { mutableStateOf(!IntroPrefs.hasShown(context)) }
+    var showOnboarding by rememberSaveable {
         mutableStateOf(!showIntro && !OnboardingPrefs.hasShown(context))
     }
     // Permission request flow: intro -> permissions -> onboarding
-    var introComplete by remember { mutableStateOf(!showIntro) }
+    var introComplete by rememberSaveable { mutableStateOf(!showIntro) }
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ ->
-        showOnboarding = true
+        showOnboarding = !OnboardingPrefs.hasShown(context)
     }
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -94,11 +95,11 @@ fun NoteFlowApp(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            showOnboarding = true
+            showOnboarding = !OnboardingPrefs.hasShown(context)
         }
     }
     // When intro completes, start permission request chain
-    LaunchedEffect(introComplete) {
+    LaunchedEffect(showIntro, introComplete) {
         if (!introComplete && !showIntro) {
             introComplete = true
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -635,7 +636,6 @@ fun NoteFlowApp(
     if (showIntro) {
         IntroScreen(onComplete = {
             IntroPrefs.markShown(context)
-            OnboardingPrefs.markShown(context)
             showIntro = false
         })
     } else if (showOnboarding) {

@@ -981,10 +981,8 @@ class WhisperQnnBridge(private val context: Context) {
                     for (i in 1 until primVocabSize) {
                         if (primLogits[lastOffset + i] > primLogits[lastOffset + bonus]) bonus = i
                     }
-                    if (bonus != TOKEN_EOT) {
-                        allTokens.add(bonus)
-                        primInputIds.add(bonus.toLong())
-                    }
+                    allTokens.add(bonus)
+                    primInputIds.add(bonus.toLong())
                 }
 
                 primInputs.values.forEach { it.close() }

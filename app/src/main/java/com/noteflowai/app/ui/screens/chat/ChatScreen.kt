@@ -1901,6 +1901,40 @@ fun ChatBubble(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
+                        Row(
+                            modifier = Modifier.padding(top = AppSpacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            )
+                            var userMenuExpanded by remember { mutableStateOf(false) }
+                            Box {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(R.string.chat_desc_more),
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { userMenuExpanded = true },
+                                    tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                                )
+                                DropdownMenu(expanded = userMenuExpanded, onDismissRequest = { userMenuExpanded = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_desc_copy)) },
+                                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                        onClick = { userMenuExpanded = false; onCopy() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_desc_delete)) },
+                                        leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error) },
+                                        onClick = { userMenuExpanded = false; onDelete() }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             } else {

@@ -37,75 +37,86 @@ class DailyDigestReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val searchIndex = NoteSearchIndex()
-                val extractor = ConceptExtractor(searchIndex)
-                val temporalIndex = TemporalIndex(extractor)
-                val conceptGraph = ConceptGraphRepository(extractor)
+                kotlinx.coroutines.withTimeout(8_000L) {
+                    val searchIndex = NoteSearchIndex()
+                    val extractor = ConceptExtractor(searchIndex)
+                    val temporalIndex = TemporalIndex(extractor)
+                    val conceptGraph = ConceptGraphRepository(extractor)
 
-                temporalIndex.loadFromDisk(context)
-                conceptGraph.loadFromDisk(context)
+                    temporalIndex.loadFromDisk(context)
+                    conceptGraph.loadFromDisk(context)
 
-                val manager = DailyDigestManager(temporalIndex, conceptGraph, searchIndex)
-                val digest = manager.generateDigest()
+                    val manager = DailyDigestManager(temporalIndex, conceptGraph, searchIndex)
+                    val digest = manager.generateDigest()
 
-                // Save to disk
-                DigestStorage.save(context, digest)
+                    // Save to disk
+                    DigestStorage.save(context, digest)
 
-                // Build notification
-                val activityCount = digest.recentActivity.size
-                val questionCount = digest.openQuestions.size
-                val staleCount = digest.staleConcepts.size
-                val connectionCount = digest.hiddenConnections.size
-
-                val title = "Your Daily Digest"
-                val detail = buildString {
-                    if (activityCount > 0) append("$activityCount recent topics")
-                    if (questionCount > 0) {
-                        if (isNotEmpty()) append(", ")
-                        append("$questionCount open questions")
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        return@withTimeout
                     }
-                    if (staleCount > 0) {
-                        if (isNotEmpty()) append(", ")
-                        append("$staleCount stale concepts")
-                    }
-                    if (connectionCount > 0) {
-                        if (isNotEmpty()) append(", ")
-                        append("$connectionCount hidden connections")
-                    }
-                    if (isEmpty()) append("All caught up!")
-                }
 
-                val openIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra("navigate_to", "DIGEST")
-                }
-                val pendingIntent = PendingIntent.getActivity(
-                    context, 0, openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+                    // Build notification
+                    val activityCount = digest.recentActivity.size
+                    val questionCount = digest.openQuestions.size
+                    val staleCount = digest.staleConcepts.size
+                    val connectionCount = digest.hiddenConnections.size
 
-                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_notification_mic)
-                    .setContentTitle(title)
-                    .setContentText(detail)
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
-                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                    .setContentIntent(pendingIntent)
-                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                    .setPublicVersion(
-                        NotificationCompat.Builder(context, CHANNEL_ID)
-                            .setSmallIcon(R.drawable.ic_notification_mic)
-                            .setContentTitle("Daily Digest")
-                            .setContentText("Your daily brief is ready")
-                            .build()
+                    val title = "Your Daily Digest"
+                    val detail = buildString {
+                        if (activityCount > 0) append("$activityCount recent topics")
+                        if (questionCount > 0) {
+                            if (isNotEmpty()) append(", ")
+                            append("$questionCount open questions")
+                        }
+                        if (staleCount > 0) {
+                            if (isNotEmpty()) append(", ")
+                            append("$staleCount stale concepts")
+                        }
+                        if (connectionCount > 0) {
+                            if (isNotEmpty()) append(", ")
+                            append("$connectionCount hidden connections")
+                        }
+                        if (isEmpty()) append("All caught up!")
+                    }
+
+                    val openIntent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("navigate_to", "DIGEST")
+                    }
+                    val pendingIntent = PendingIntent.getActivity(
+                        context, 0, openIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    .setAutoCancel(true)
-                    .build()
 
-                val managerNotif = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                managerNotif.notify(NOTIFICATION_ID, notification)
+                    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_notification_mic)
+                        .setContentTitle(title)
+                        .setContentText(detail)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .setContentIntent(pendingIntent)
+                        .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                        .setPublicVersion(
+                            NotificationCompat.Builder(context, CHANNEL_ID)
+                                .setSmallIcon(R.drawable.ic_notification_mic)
+                                .setContentTitle("Daily Digest")
+                                .setContentText("Your daily brief is ready")
+                                .build()
+                        )
+                        .setAutoCancel(true)
+                        .build()
 
-                Log.i(TAG, "Daily digest generated: $detail")
+                    val managerNotif = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    managerNotif.notify(NOTIFICATION_ID, notification)
+
+                    Log.i(TAG, "Daily digest generated: $detail")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to generate digest: ${e.message}", e)
             } finally {

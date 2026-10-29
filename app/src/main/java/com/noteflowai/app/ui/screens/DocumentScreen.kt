@@ -48,8 +48,7 @@ fun DocumentScreen(
     ) { uri ->
         uri?.let {
             val mimeType = context.contentResolver.getType(it) ?: ""
-            val supportedMimeTypes = DocumentRepository.getSupportedMimeTypes()
-            if (mimeType in supportedMimeTypes) {
+            if (DocumentRepository.isSupportedMimeType(mimeType)) {
                 viewModel.processDocument(it, mimeType)
             } else {
                 Toast.makeText(
@@ -165,10 +164,11 @@ fun DocumentScreen(
                                         horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
                                     ) {
                                         Icon(
-                                            when (uiState.mimeType) {
-                                                DocumentRepository.MIME_PDF -> Icons.Default.PictureAsPdf
-                                                DocumentRepository.MIME_DOCX -> Icons.Default.Description
-                                                DocumentRepository.MIME_HTML -> Icons.Default.Language
+                                            when {
+                                                uiState.mimeType == DocumentRepository.MIME_PDF -> Icons.Default.PictureAsPdf
+                                                uiState.mimeType == DocumentRepository.MIME_DOCX -> Icons.Default.Description
+                                                uiState.mimeType == DocumentRepository.MIME_HTML -> Icons.Default.Language
+                                                uiState.mimeType.startsWith("audio/") -> Icons.Default.GraphicEq
                                                 else -> Icons.Default.FilePresent
                                             },
                                             contentDescription = null,

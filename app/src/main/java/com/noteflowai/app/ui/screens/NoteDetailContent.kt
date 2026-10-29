@@ -327,8 +327,13 @@ fun NoteDetailContent(
                                     onClick = {
                                         moreExpanded = false
                                         com.noteflowai.app.ui.theme.Haptics.tap(context)
-                                        if (isSpeaking) viewModel.stopSpeaking()
-                                        else viewModel.speakAiResponse(editedContent)
+                                        if (isSpeaking) {
+                                            viewModel.stopSpeaking()
+                                        } else if (!viewModel.speakAiResponse(editedContent)) {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Text-to-Speech is disabled. Enable it in Settings.")
+                                            }
+                                        }
                                     }
                                 )
                                 DropdownMenuItem(
@@ -705,6 +710,31 @@ fun NoteDetailContent(
                                                 )
                                             }
                                         }
+                                    }
+                                    // Smart Suggestions Section
+                                    if (suggestions.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(AppSpacing.sm))
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        Spacer(modifier = Modifier.height(AppSpacing.sm))
+                                        SmartSuggestionBar(
+                                            suggestions = suggestions,
+                                            onLinkClick = { link ->
+                                                viewModel.addNoteConnection(note.fileName, link.targetFileName)
+                                                viewModel.clearSuggestions()
+                                            },
+                                            onMergeClick = { merge ->
+                                                viewModel.selectNoteByFileName(merge.targetFileName)
+                                            },
+                                            onTitleClick = { titleSug ->
+                                                viewModel.renameNoteTitle(note, titleSug.suggestedTitle)
+                                                viewModel.clearSuggestions()
+                                            },
+                                            onTagClick = { tagSug ->
+                                                viewModel.addTagToCurrentNote(tagSug.tag)
+                                                viewModel.clearSuggestions()
+                                            },
+                                            onDismiss = { viewModel.clearSuggestions() }
+                                        )
                                     }
                                 }
                             }

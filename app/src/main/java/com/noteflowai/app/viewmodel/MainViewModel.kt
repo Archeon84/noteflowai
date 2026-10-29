@@ -1115,8 +1115,14 @@ Rules:
                 noteSearchIndex.search(query, maxResults = 20).map { it.fileName }.toSet()
             } else emptySet()
 
+            val app = getApplication<Application>()
+            val localizedAll = runCatching { app.getString(R.string.notes_category_all) }.getOrDefault("All")
+            val localizedAz = runCatching { app.getString(R.string.notes_sort_name_az) }.getOrDefault("Name (A-Z)")
+            val localizedZa = runCatching { app.getString(R.string.notes_sort_name_za) }.getOrDefault("Name (Z-A)")
+            val localizedOldest = runCatching { app.getString(R.string.notes_sort_oldest) }.getOrDefault("Date (Oldest)")
+
             notes.filter { note ->
-                (cat == "All" || note.category == cat) &&
+                (cat == "All" || cat == localizedAll || note.category == cat) &&
                         (note.fileName.contains(query, ignoreCase = true) ||
                                 note.preview.contains(query, ignoreCase = true) ||
                                 fuzzyMatchFileNames.contains(note.fileName) ||
@@ -1126,9 +1132,9 @@ Rules:
                                 )))
             }.let { filtered ->
                 when (sort) {
-                    "Name (A-Z)" -> filtered.sortedBy { it.fileName.lowercase() }
-                    "Name (Z-A)" -> filtered.sortedByDescending { it.fileName.lowercase() }
-                    "Date (Oldest)" -> filtered.sortedWith(
+                    "Name (A-Z)", localizedAz -> filtered.sortedBy { it.fileName.lowercase() }
+                    "Name (Z-A)", localizedZa -> filtered.sortedByDescending { it.fileName.lowercase() }
+                    "Date (Oldest)", localizedOldest -> filtered.sortedWith(
                         compareByDescending<NoteFile> { it.pinned }.thenBy { it.lastModifiedEpoch }
                     )
 
@@ -1446,6 +1452,12 @@ Rules:
         }
 
         audioRecorder.setQuality(1)
+
+        viewModelScope.launch {
+            RecordingService.stopRequests.collect {
+                stopRecording()
+            }
+        }
 
         viewModelScope.launch {
             var lastTranscriptUiUpdate = 0L
@@ -2018,7 +2030,10 @@ Rules:
         if (ttsManager != null) return
         val useDeepgram = deepgramApiKey.value.isNotBlank()
         val manager: TtsManager = if (useDeepgram) {
-            DeepgramTtsManager(getApplication())
+            DeepgramTtsManager(
+                context = getApplication(),
+                focus = com.noteflowai.app.data.tts.RealAudioFocusController(getApplication())
+            )
         } else {
             AndroidTtsManager(getApplication())
         }
@@ -3047,6 +3062,7 @@ Rules:
             }
             try {
                 val docName = note.fileName.removeSuffix(".json").removeSuffix(".txt")
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Note" }
                 val cacheDir = File(getApplication<Application>().cacheDir, "exports")
                 cacheDir.mkdirs()
                 val pdfFile = File(cacheDir, "$docName.pdf")
@@ -3143,7 +3159,6 @@ Rules:
                     putExtra(Intent.EXTRA_STREAM, uri)
                     putExtra(Intent.EXTRA_SUBJECT, docName)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 }
                 withContext(Dispatchers.Main) {
                     context.startActivity(Intent.createChooser(intent, "Export as PDF"))
@@ -3164,6 +3179,7 @@ Rules:
             }
             try {
                 val docName = note.fileName.removeSuffix(".json").removeSuffix(".txt")
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Note" }
                 val cacheDir = File(getApplication<Application>().cacheDir, "exports")
                 cacheDir.mkdirs()
                 val txtFile = File(cacheDir, "$docName.txt")
@@ -3179,7 +3195,6 @@ Rules:
                     putExtra(Intent.EXTRA_STREAM, uri)
                     putExtra(Intent.EXTRA_SUBJECT, docName)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 }
                 withContext(Dispatchers.Main) {
                     context.startActivity(Intent.createChooser(intent, "Export as Text"))
@@ -3200,9 +3215,12 @@ Rules:
             }
             try {
                 val docName = note.fileName.removeSuffix(".json").removeSuffix(".txt")
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Note" }
                 val cacheDir = File(getApplication<Application>().cacheDir, "exports")
                 cacheDir.mkdirs()
                 val docFile = File(cacheDir, "$docName.doc")
+                val escapedHeading = docName.replace("_", " ")
+                    .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
                 val htmlContent = buildString {
                     appendLine("<html><head><meta charset=\"UTF-8\">")
@@ -3211,7 +3229,7 @@ Rules:
                     appendLine("h1 { font-size: 18pt; margin-bottom: 12pt; }")
                     appendLine("p { margin-bottom: 8pt; }")
                     appendLine("</style></head><body>")
-                    appendLine("<h1>${docName.replace("_", " ")}</h1>")
+                    appendLine("<h1>$escapedHeading</h1>")
                     for (line in content.split("\n")) {
                         if (line.isBlank()) {
                             appendLine("<br>")
@@ -3229,11 +3247,10 @@ Rules:
                     getApplication(), "${getApplication<Application>().packageName}.fileprovider", docFile
                 )
                 val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/html"
+                    type = "application/msword"
                     putExtra(Intent.EXTRA_STREAM, uri)
                     putExtra(Intent.EXTRA_SUBJECT, docName)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 }
                 withContext(Dispatchers.Main) {
                     context.startActivity(Intent.createChooser(intent, "Export as Document"))
@@ -3250,6 +3267,7 @@ Rules:
             try {
                 val html = com.noteflowai.app.data.export.HtmlExporter.export(note)
                 val docName = note.fileName.removeSuffix(".json").removeSuffix(".txt")
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "Note" }
                 val cacheDir = File(getApplication<Application>().cacheDir, "exports")
                 cacheDir.mkdirs()
                 val htmlFile = File(cacheDir, "$docName.html")

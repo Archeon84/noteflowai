@@ -1,4 +1,4 @@
-﻿package com.noteflowai.app.whisper
+package com.noteflowai.app.whisper
 
 import android.content.Context
 import android.os.PowerManager
@@ -383,6 +383,8 @@ class WhisperNpuEngine(private val context: Context) {
         val sb = StringBuilder()
         for (token in tokens) {
             if (token == TOKEN_EOT) break
+            // Skip Whisper special control/language/timestamp tokens (>= 50257)
+            if (token >= 50257) continue
             if (token < vocabulary.size) {
                 var text = vocabulary[token]
                 // Whisper BPE uses Ä  (U+0120) to represent leading space

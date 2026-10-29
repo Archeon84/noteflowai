@@ -49,6 +49,7 @@ fun PrivacyDashboardScreen(
     val backupMessage by backupDriveViewModel?.backupMessage?.collectAsStateWithLifecycle() ?: mutableStateOf(null)
 
     var showPurgeDialog by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
     var showBackupPasswordDialog by remember { mutableStateOf(false) }
     var backupPassword by remember { mutableStateOf("") }
     var showRestorePasswordDialog by remember { mutableStateOf(false) }
@@ -206,18 +207,11 @@ fun PrivacyDashboardScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                     OutlinedButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                Toast.makeText(context, "Could not open browser", Toast.LENGTH_SHORT).show()
-                            }
-                        },
+                        onClick = { showPrivacyPolicyDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = Icons.Default.OpenInNew,
+                            imageVector = Icons.Default.Policy,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -482,7 +476,85 @@ fun PrivacyDashboardScreen(
             }
         )
     }
+
+    // In-App Offline Privacy Policy Viewer Dialog
+    if (showPrivacyPolicyDialog) {
+        val privacyPolicyUrl = stringResource(R.string.privacy_policy_url)
+        AlertDialog(
+            onDismissRequest = { showPrivacyPolicyDialog = false },
+            title = { Text(stringResource(R.string.privacy_policy_title)) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                ) {
+                    Text(
+                        text = OFFLINE_PRIVACY_POLICY_TEXT,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyPolicyDialog = false }) {
+                    Text(stringResource(R.string.dismiss))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Could not open browser", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open in Browser")
+                }
+            }
+        )
+    }
 }
+
+private const val OFFLINE_PRIVACY_POLICY_TEXT = """Last Updated: October 2026
+
+NoteFlow AI is built with a strict Privacy-First, Zero-Telemetry, and Offline-First architecture. Your notes, voice recordings, scanned documents, and knowledge graph belong exclusively to you.
+
+1. Zero Telemetry & On-Device Processing
+• No Analytics or Ad SDKs: NoteFlow AI contains no behavioral analytics (no Google/Firebase Analytics), no crash telemetry, and no advertising SDKs.
+• On-Device AI by Default: Speech-to-text (whisper.cpp / ONNX / QNN), document OCR (Google ML Kit), translation (NLLB-200 / ML Kit), semantic embeddings (MiniLM ONNX / GTE Reranker), and local LLM inference (Google LiteRT-LM) run 100% locally on your device.
+• Local-Only Mode (Firewall): Enabling Local-Only Mode blocks all outbound network requests at the HTTP interceptor layer.
+
+2. Permissions & Device Access
+• Microphone (RECORD_AUDIO, FOREGROUND_SERVICE_MICROPHONE): Used only for user-initiated or user-scheduled audio recording. A persistent "NoteFlow AI — Recording" notification is displayed while recording in the background.
+• Camera (CAMERA): Used exclusively in the OCR Scanner screen for on-device text recognition.
+• Notifications (POST_NOTIFICATIONS): Used for active recording controls, scheduled recording alerts, and optional daily digest / recall reminders.
+• Document & Audio Import: Uses the Android System File Picker (SAF) with zero broad storage permissions.
+
+3. Data Storage & Encryption
+• Memory Database (memory_layer.db): Source segments, embeddings, entities, decisions, commitments, and timeline entries are encrypted at rest with SQLCipher AES-256 backed by Android Keystore.
+• API Keys (noteflow_secure_prefs): Encrypted via AndroidX Security Crypto (AES256-SIV / AES256-GCM).
+• Raw Files & Backups: Notes, recordings, and chats are stored in OS-sandboxed internal storage (filesDir). Password-protected backups (.enc.zip) use AES-256-GCM (PBKDF2-HMAC-SHA256, 600,000 iterations).
+• OS Backup Exclusion: Sensitive databases and keys are excluded from Android cloud and ADB backups.
+
+4. Optional Cloud Integrations (Disabled by Default)
+• Google Drive Sync: Uses the restricted drive.appdata scope to store backups only in NoteFlow AI's private appDataFolder on your Google Drive.
+• Custom Cloud AI / Deepgram / Web Search: Only when configured with your personal API key or enabled by you, prompts, audio, or search queries are sent directly over HTTPS/TLS to your chosen provider.
+• YouTube Captions & Model Downloads: Fetching YouTube transcripts connects to YouTube / caption fallback endpoints; downloading offline models connects to Hugging Face, Qualcomm AI Hub, or Google ML Kit.
+
+5. Data Deletion & User Rights
+• Delete notes, recordings, caches, or derived memory data anytime in the App, or uninstall the App to permanently erase all local data."""
 
 @Composable
 private fun PrivacyStatusRow(

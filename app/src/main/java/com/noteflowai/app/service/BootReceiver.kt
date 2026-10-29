@@ -7,6 +7,7 @@ import android.util.Log
 import com.noteflowai.app.data.RecallReminderManager
 import com.noteflowai.app.data.ScheduledRecordingManager
 import com.noteflowai.app.data.settings.SettingsManager
+import kotlinx.coroutines.launch
 
 /**
  * Re-schedules daily alarms after device reboot.
@@ -23,34 +24,44 @@ class BootReceiver : BroadcastReceiver() {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
 
         Log.i(TAG, "Boot completed — re-scheduling alarms")
-        val settings = SettingsManager(context)
+        val appContext = context.applicationContext
+        val pendingResult = goAsync()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val settings = SettingsManager.getInstance(appContext)
 
-        // Re-schedule daily digest if enabled
-        if (settings.dailyDigestEnabledBlocking) {
-            DailyDigestScheduler(context).schedule()
-            Log.i(TAG, "Re-scheduled daily digest")
-        }
+                // Re-schedule daily digest if enabled
+                if (settings.dailyDigestEnabledBlocking) {
+                    DailyDigestScheduler(appContext).schedule()
+                    Log.i(TAG, "Re-scheduled daily digest")
+                }
 
-        // Re-schedule recall reminders if enabled
-        if (settings.recallRemindersEnabledBlocking) {
-            RecallReminderManager(context).schedule(
-                RecallReminderManager.ReminderConfig(enabled = true)
-            )
-            Log.i(TAG, "Re-scheduled recall reminders")
-        }
+                // Re-schedule recall reminders if enabled
+                if (settings.recallRemindersEnabledBlocking) {
+                    RecallReminderManager(appContext).schedule(
+                        RecallReminderManager.ReminderConfig(enabled = true)
+                    )
+                    Log.i(TAG, "Re-scheduled recall reminders")
+                }
 
-        // Re-schedule scheduled recording if enabled (config persisted in DataStore)
-        if (settings.scheduledRecordingEnabledBlocking) {
-            val (hour, minute, duration) = settings.scheduledRecordingConfigBlocking
-            ScheduledRecordingManager(context).schedule(
-                ScheduledRecordingManager.ScheduleConfig(
-                    hour = hour,
-                    minute = minute,
-                    enabled = true,
-                    durationMinutes = duration
-                )
-            )
-            Log.i(TAG, "Re-scheduled scheduled recording ($hour:$minute, ${duration}min)")
+                // Re-schedule scheduled recording if enabled (config persisted in DataStore)
+                if (settings.scheduledRecordingEnabledBlocking) {
+                    val (hour, minute, duration) = settings.scheduledRecordingConfigBlocking
+                    ScheduledRecordingManager(appContext).schedule(
+                        ScheduledRecordingManager.ScheduleConfig(
+                            hour = hour,
+                            minute = minute,
+                            enabled = true,
+                            durationMinutes = duration
+                        )
+                    )
+                    Log.i(TAG, "Re-scheduled scheduled recording ($hour:$minute, ${duration}min)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to re-schedule alarms after boot: ${e.message}")
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }

@@ -14,6 +14,8 @@ import com.noteflowai.app.R
 
 import android.content.pm.ServiceInfo
 import android.os.Build
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 
 class RecordingService : Service() {
 
@@ -22,11 +24,17 @@ class RecordingService : Service() {
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.noteflowai.app.STOP_RECORDING"
         private const val AUTO_STOP_WHAT = 1001
+        val stopRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
     private val autoStopHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var autoStopRunnable: Runnable? = null
+    private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private var scheduledRecorder: com.noteflowai.app.data.AudioRecorderHelper? = null
+    private var scheduledJob: kotlinx.coroutines.Job? = null
+    private var scheduledTempFile: java.io.File? = null
+    private var scheduledFileName: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -35,9 +43,8 @@ class RecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            releaseWakeLock()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            stopRequests.tryEmit(Unit)
+            stopScheduledCaptureAndFinish()
             return START_NOT_STICKY
         }
 
@@ -59,8 +66,62 @@ class RecordingService : Service() {
             return START_NOT_STICKY
         }
         acquireWakeLock()
+        if (isScheduled && scheduledRecorder == null) {
+            startScheduledCapture()
+        }
         scheduleAutoStop(intent?.getIntExtra("duration_minutes", 0) ?: 0)
         return START_NOT_STICKY
+    }
+
+    private fun startScheduledCapture() {
+        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val fileName = "scheduled_$dateStr.wav"
+        val tempFile = java.io.File(cacheDir, "temp_$fileName")
+        val recorder = com.noteflowai.app.data.AudioRecorderHelper().apply { setQuality(1) }
+        scheduledFileName = fileName
+        scheduledTempFile = tempFile
+        scheduledRecorder = recorder
+        scheduledJob = serviceScope.launch {
+            try {
+                recorder.startRecording(tempFile)
+            } catch (e: Exception) {
+                android.util.Log.e("RecordingService", "Scheduled recording failed: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun stopScheduledCaptureAndFinish() {
+        val recorder = scheduledRecorder
+        val job = scheduledJob
+        val tempFile = scheduledTempFile
+        val fileName = scheduledFileName
+        scheduledRecorder = null
+        scheduledJob = null
+        scheduledTempFile = null
+        scheduledFileName = null
+
+        if (recorder != null && tempFile != null && fileName != null) {
+            recorder.stopRecording()
+            serviceScope.launch {
+                runCatching { job?.join() }
+                if (tempFile.exists() && tempFile.length() > 44L) {
+                    runCatching {
+                        com.noteflowai.app.data.RecordingRepository.getInstance(applicationContext)
+                            .saveRecording(tempFile, fileName)
+                    }
+                }
+                runCatching { tempFile.delete() }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    releaseWakeLock()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+        } else {
+            releaseWakeLock()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     /**
@@ -72,9 +133,8 @@ class RecordingService : Service() {
         autoStopRunnable?.let { autoStopHandler.removeCallbacks(it) }
         if (durationMinutes <= 0) return
         val runnable = Runnable {
-            releaseWakeLock()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            stopRequests.tryEmit(Unit)
+            stopScheduledCaptureAndFinish()
         }
         autoStopRunnable = runnable
         autoStopHandler.postDelayed(runnable, durationMinutes * 60_000L)
@@ -154,6 +214,8 @@ class RecordingService : Service() {
         super.onDestroy()
         autoStopRunnable?.let { autoStopHandler.removeCallbacks(it) }
         autoStopRunnable = null
+        scheduledRecorder?.stopRecording()
+        serviceScope.cancel()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
