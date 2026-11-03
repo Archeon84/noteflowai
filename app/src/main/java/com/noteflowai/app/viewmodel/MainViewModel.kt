@@ -25,6 +25,12 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.noteflowai.app.data.*
 import com.noteflowai.app.data.chat.*
+import android.provider.OpenableColumns
+import com.noteflowai.app.data.importer.ContentImporterRegistry
+import com.noteflowai.app.data.importer.ImageOcrImporter
+import com.noteflowai.app.data.importer.AudioImporter
+import com.noteflowai.app.data.importer.ImportInput
+import com.noteflowai.app.data.importer.ImportResult
 import com.noteflowai.app.R
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
@@ -3293,7 +3299,13 @@ Rules:
     }
 
     // AI Chat
-    fun sendChatMessage(text: String, attachmentUri: String? = null, attachmentType: String? = null) {
+    fun sendChatMessage(
+        text: String,
+        attachmentUri: String? = null,
+        attachmentType: String? = null,
+        attachmentName: String? = null,
+        attachmentText: String? = null
+    ) {
         if (_isAiTyping.value) {
             Log.w("MainViewModel", "sendChatMessage: ignored because AI is currently typing")
             return
@@ -3301,8 +3313,93 @@ Rules:
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var base64Image: String? = null
-                if (attachmentType == "image" && attachmentUri != null) {
-                    base64Image = convertUriToBase64(attachmentUri)
+                var extractedAttachmentText = attachmentText
+                val resolvedName = attachmentName ?: attachmentUri?.let { uriStr ->
+                    runCatching { getFileNameFromUri(Uri.parse(uriStr)) }.getOrNull()
+                }
+
+                if (attachmentUri != null && extractedAttachmentText == null) {
+                    val uri = Uri.parse(attachmentUri)
+                    val context = getApplication<Application>()
+                    val detectedMime = runCatching { context.contentResolver.getType(uri) }.getOrNull()?.lowercase().orEmpty()
+                    val ext = resolvedName?.substringAfterLast('.', "")?.lowercase().orEmpty()
+
+                    val isAudio = attachmentType == "audio" || detectedMime.startsWith("audio/") || ext in setOf("wav", "mp3", "m4a", "aac", "ogg", "flac")
+                    val isImage = attachmentType == "image" || detectedMime.startsWith("image/") || ext in setOf("jpg", "jpeg", "png", "webp", "heic", "bmp")
+
+                    if (isImage) {
+                        base64Image = convertUriToBase64(attachmentUri)
+                        withContext(Dispatchers.Main) {
+                            _longTaskStatus.value = context.getString(R.string.chat_extracting_image_ocr)
+                        }
+                        try {
+                            val ocrResult = ImageOcrImporter(context).import(
+                                ImportInput(uri = uri, title = resolvedName, mimeType = detectedMime)
+                            )
+                            extractedAttachmentText = when (ocrResult) {
+                                is ImportResult.Success -> ocrResult.text
+                                is ImportResult.Failure -> "(No text detected in image)"
+                            }
+                        } catch (e: Exception) {
+                            Log.w("MainViewModel", "OCR extraction failed: ${e.message}")
+                            extractedAttachmentText = "(Image attached: ${resolvedName ?: "image"})"
+                        }
+                    } else if (isAudio) {
+                        withContext(Dispatchers.Main) {
+                            _longTaskStatus.value = context.getString(R.string.chat_transcribing_audio)
+                        }
+                        try {
+                            val audioResult = AudioImporter(context).import(
+                                ImportInput(uri = uri, title = resolvedName, mimeType = detectedMime)
+                            )
+                            extractedAttachmentText = when (audioResult) {
+                                is ImportResult.Success -> audioResult.text
+                                is ImportResult.Failure -> "(Audio transcription failed: ${audioResult.rawMessage})"
+                            }
+                        } catch (e: Exception) {
+                            Log.w("MainViewModel", "Audio transcription failed: ${e.message}")
+                            extractedAttachmentText = "(Audio attached: ${resolvedName ?: "audio"})"
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            _longTaskStatus.value = context.getString(R.string.chat_extracting_document)
+                        }
+                        try {
+                            val docResult = ContentImporterRegistry(context).import(
+                                ImportInput(uri = uri, title = resolvedName, mimeType = detectedMime)
+                            )
+                            extractedAttachmentText = when (docResult) {
+                                is ImportResult.Success -> docResult.text
+                                is ImportResult.Failure -> "(Document extraction failed: ${docResult.rawMessage})"
+                            }
+                        } catch (e: Exception) {
+                            Log.w("MainViewModel", "Document extraction failed: ${e.message}")
+                            extractedAttachmentText = "(Document attached: ${resolvedName ?: "document"})"
+                        }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        _longTaskStatus.value = null
+                    }
+                }
+
+                if (extractedAttachmentText != null && extractedAttachmentText.length > 15_000) {
+                    extractedAttachmentText = extractedAttachmentText.take(15_000) + "\n\n[...remaining content trimmed for on-device context window...]"
+                }
+
+                val effectiveType = when {
+                    attachmentType != null -> attachmentType
+                    attachmentUri != null -> {
+                        val uri = Uri.parse(attachmentUri)
+                        val mime = runCatching { getApplication<Application>().contentResolver.getType(uri) }.getOrNull()?.lowercase().orEmpty()
+                        val ext = resolvedName?.substringAfterLast('.', "")?.lowercase().orEmpty()
+                        when {
+                            mime.startsWith("image/") || ext in setOf("jpg", "jpeg", "png", "webp", "heic") -> "image"
+                            mime.startsWith("audio/") || ext in setOf("wav", "mp3", "m4a", "aac", "ogg", "flac") -> "audio"
+                            else -> "document"
+                        }
+                    }
+                    else -> null
                 }
 
                 withContext(Dispatchers.Main) {
@@ -3310,7 +3407,9 @@ Rules:
                         role = "user",
                         content = text,
                         attachmentUri = attachmentUri,
-                        attachmentType = attachmentType,
+                        attachmentType = effectiveType,
+                        attachmentName = resolvedName,
+                        attachmentText = extractedAttachmentText,
                         images = base64Image?.let { listOf(it) }
                     )
                     val updatedMessages = _chatMessages.value + userMsg
@@ -3344,6 +3443,12 @@ Rules:
 
                             val messagesForApi = updatedMessages.filter {
                                 it.role != "assistant" || it.content.isNotBlank()
+                            }.map { msg ->
+                                if (msg.role == "user" && !msg.attachmentText.isNullOrBlank() && (msg.attachmentType != "image" || msg.images.isNullOrEmpty())) {
+                                    msg.copy(content = formatUserMessageWithAttachment(msg))
+                                } else {
+                                    msg
+                                }
                             }
 
                             // Web search (configurable, best-effort). Runs only when enabled
@@ -3472,6 +3577,9 @@ Rules:
                                                         else -> OfflineRagPromptBuilder.getOfflineGeneralKnowledgeDirectives()
                                                     }
                                                     append(offlineDirectives)
+                                                    if (messagesForApi.takeLast(6).any { !it.attachmentText.isNullOrBlank() }) {
+                                                        append("\n\nATTACHMENT INSTRUCTIONS: When an attached document, image OCR text, or audio transcript is provided in a user turn, use the attached content directly to answer the user's questions, analyze, summarize, or extract details as requested.")
+                                                    }
                                                     append("\n\nWhen the user asks to create, write, or save a note, reply with exactly one block in this format and nothing else before it:\nCREATE_NOTE\nTITLE: <note title>\nCATEGORY: <category or All>\nCONTENT: <note content>\n")
                                                 }
                                             }
@@ -3479,8 +3587,13 @@ Rules:
                                             var systemPrepended = false
                                             recentMsgs.forEach { msg ->
                                                 val role = if (msg.role == "assistant") "model" else "user"
-                                                val content = if (msg == recentMsgs.last()) msg.content.take(histCapLast)
-                                                else msg.content.take(histCapRest)
+                                                val baseContent = if (role == "user" && !msg.attachmentText.isNullOrBlank()) {
+                                                    formatUserMessageWithAttachment(msg)
+                                                } else {
+                                                    msg.content
+                                                }
+                                                val content = if (msg == recentMsgs.last()) baseContent.take(histCapLast)
+                                                else baseContent.take(histCapRest)
                                                 append("<start_of_turn>$role\n")
                                                 if (!systemPrepended && role == "user" && sysContent.isNotBlank()) {
                                                     append(sysContent)
@@ -4926,6 +5039,43 @@ Rules:
         }
     }
 
+    private fun getFileNameFromUri(uri: Uri): String {
+        var name = "attachment"
+        runCatching {
+            val cursor = getApplication<Application>().contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (it.moveToFirst() && nameIndex >= 0) {
+                    name = it.getString(nameIndex)
+                }
+            }
+        }
+        return name
+    }
+
+    private fun formatUserMessageWithAttachment(msg: ChatMessage): String {
+        val text = msg.content.trim()
+        val attachmentText = msg.attachmentText?.trim().orEmpty()
+        if (attachmentText.isEmpty()) return text
+
+        val typeLabel = when (msg.attachmentType) {
+            "image" -> "Attached Image OCR"
+            "audio" -> "Attached Audio Transcript"
+            else -> "Attached Document Content"
+        }
+        val fileName = msg.attachmentName ?: "Attachment"
+        val promptHeader = if (text.isNotBlank()) {
+            text
+        } else {
+            when (msg.attachmentType) {
+                "image" -> "Please analyze and explain the attached image content."
+                "audio" -> "Please summarize and extract key insights from this audio recording."
+                else -> "Please analyze and summarize the attached document."
+            }
+        }
+        return "$promptHeader\n\n=== $typeLabel ($fileName) ===\n$attachmentText"
+    }
+
     fun regenerateLastMessage() {
         val lastUserMsgIndex =
             _chatMessages.value.findLast { it.role == "user" }?.let { _chatMessages.value.indexOf(it) } ?: return
@@ -4934,7 +5084,13 @@ Rules:
 
         val lastUserMsg = _chatMessages.value.last()
         _chatMessages.value = _chatMessages.value.dropLast(1)
-        sendChatMessage(lastUserMsg.content, lastUserMsg.attachmentUri, lastUserMsg.attachmentType)
+        sendChatMessage(
+            text = lastUserMsg.content,
+            attachmentUri = lastUserMsg.attachmentUri,
+            attachmentType = lastUserMsg.attachmentType,
+            attachmentName = lastUserMsg.attachmentName,
+            attachmentText = lastUserMsg.attachmentText
+        )
     }
 
     fun deleteChatMessage(message: ChatMessage) {
@@ -4952,7 +5108,9 @@ Rules:
     }
 
     private suspend fun saveCurrentChat(messages: List<ChatMessage>) {
-        val title = messages.firstOrNull { it.role == "user" }?.content?.take(30) ?: "New Chat"
+        val title = messages.firstOrNull { it.role == "user" }?.let {
+            if (it.content.isNotBlank()) it.content.take(30) else it.attachmentName ?: "Attachment Chat"
+        } ?: "New Chat"
         val updatedSession = _currentChatSession.value.copy(
             messages = messages,
             title = title,

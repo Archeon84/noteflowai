@@ -20,14 +20,14 @@ class ContentImporterRegistry(private val context: Context) {
         }
 
         val mime = input.mimeType.orEmpty().lowercase()
-        val extension = (input.file?.extension ?: input.uri?.path?.substringAfterLast('.', "")).orEmpty().lowercase()
+        val extension = (input.file?.extension ?: input.title?.substringAfterLast('.', "") ?: input.uri?.path?.substringAfterLast('.', "")).orEmpty().lowercase()
 
         return when {
             mime == "application/pdf" || extension == "pdf" -> pdfImporter
-            mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || extension == "docx" -> docxImporter
+            mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || mime == "application/msword" || extension in setOf("docx", "doc") -> docxImporter
             mime == "text/html" || extension == "html" || extension == "htm" -> htmlImporter
-            mime.startsWith("image/") || extension in setOf("jpg", "jpeg", "png", "webp", "heic") -> ocrImporter
-            mime.startsWith("audio/") || extension in setOf("wav", "mp3", "m4a", "ogg", "aac") -> audioImporter
+            mime.startsWith("image/") || extension in setOf("jpg", "jpeg", "png", "webp", "heic", "bmp") -> ocrImporter
+            mime.startsWith("audio/") || extension in setOf("wav", "mp3", "m4a", "ogg", "aac", "flac") -> audioImporter
             mime.startsWith("text/") || extension in setOf("txt", "md", "csv", "json") -> textImporter
             else -> textImporter
         }

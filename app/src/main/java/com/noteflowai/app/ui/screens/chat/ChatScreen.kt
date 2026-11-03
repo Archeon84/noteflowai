@@ -126,6 +126,7 @@ fun ChatScreen(
     
     var currentAttachmentUri by remember { mutableStateOf<String?>(null) }
     var currentAttachmentType by remember { mutableStateOf<String?>(null) }
+    var currentAttachmentName by remember { mutableStateOf<String?>(null) }
 
     var showDeleteMsgConfirm by remember { mutableStateOf(false) }
     var msgToDelete by remember { mutableStateOf<ChatMessage?>(null) }
@@ -151,10 +152,21 @@ fun ChatScreen(
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            currentAttachmentUri = uri.toString()
-            // currentAttachmentType is already set by AttachmentMenu onSelect
+            val detected = detectAttachmentType(context, uri, currentAttachmentType)
+            if (detected.isSupported) {
+                currentAttachmentUri = uri.toString()
+                currentAttachmentType = detected.type
+                currentAttachmentName = detected.fileName
+            } else {
+                Toast.makeText(context, context.getString(R.string.chat_unsupported_file), Toast.LENGTH_LONG).show()
+                currentAttachmentUri = null
+                currentAttachmentType = null
+                currentAttachmentName = null
+            }
         } else {
+            currentAttachmentUri = null
             currentAttachmentType = null
+            currentAttachmentName = null
         }
         showAttachmentMenu = false
     }
@@ -380,7 +392,10 @@ fun ChatScreen(
                                     Toast.makeText(context, context.getString(R.string.chat_local_model_not_ready), Toast.LENGTH_LONG).show()
                                     return@ChatEmptyHero
                                 }
-                                viewModel.sendChatMessage(suggestion, currentAttachmentUri, currentAttachmentType)
+                                viewModel.sendChatMessage(suggestion, currentAttachmentUri, currentAttachmentType, currentAttachmentName)
+                                currentAttachmentUri = null
+                                currentAttachmentType = null
+                                currentAttachmentName = null
                             },
                             enabled = !isLocalBusy && !isTyping
                         )
@@ -553,16 +568,21 @@ fun ChatScreen(
                                 modifier = Modifier.padding(AppSpacing.sm),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                val icon = when (currentAttachmentType) {
+                                    "image" -> Icons.Default.Image
+                                    "audio" -> Icons.Default.AudioFile
+                                    else -> Icons.Default.Description
+                                }
+                                Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(AppSpacing.sm))
                                 Text(
-                                        text = stringResource(R.string.chat_attached_prefix, currentAttachmentUri!!.substringAfterLast("/")),
+                                    text = stringResource(R.string.chat_attached_prefix, currentAttachmentName ?: currentAttachmentUri!!.substringAfterLast("/")),
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
-                                IconButton(onClick = { currentAttachmentUri = null; currentAttachmentType = null }, modifier = Modifier.size(48.dp)) {
+                                IconButton(onClick = { currentAttachmentUri = null; currentAttachmentType = null; currentAttachmentName = null }, modifier = Modifier.size(48.dp)) {
                                     Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chat_desc_remove), modifier = Modifier.size(16.dp))
                                 }
                             }
@@ -577,8 +597,7 @@ fun ChatScreen(
                                 when(type) {
                                     "image" -> filePicker.launch("image/*")
                                     "audio" -> filePicker.launch("audio/*")
-                                    "video" -> filePicker.launch("video/*")
-                                    "file" -> filePicker.launch("*/*")
+                                    else -> filePicker.launch("*/*")
                                 }
                                 showAttachmentMenu = false
                             }
@@ -636,7 +655,11 @@ fun ChatScreen(
                                     placeholder = { 
                                         Text(
                                             when {
-                                                currentAttachmentUri != null -> stringResource(R.string.chat_placeholder_image)
+                                                currentAttachmentUri != null -> when (currentAttachmentType) {
+                                                    "image" -> stringResource(R.string.chat_placeholder_image)
+                                                    "audio" -> stringResource(R.string.chat_placeholder_audio)
+                                                    else -> stringResource(R.string.chat_placeholder_document)
+                                                }
                                                 chatRecallMode == ChatRecallMode.REMOTE_API_ONLY -> stringResource(R.string.chat_placeholder_remote_only)
                                                 else -> stringResource(R.string.chat_placeholder_notes_only)
                                             }, 
@@ -698,10 +721,11 @@ fun ChatScreen(
                                             }
                                             if (inputText.isNotBlank() || currentAttachmentUri != null) {
                                                 com.noteflowai.app.ui.theme.Haptics.confirm(context)
-                                                viewModel.sendChatMessage(inputText, currentAttachmentUri, currentAttachmentType)
+                                                viewModel.sendChatMessage(inputText, currentAttachmentUri, currentAttachmentType, currentAttachmentName)
                                                 inputText = ""
                                                 currentAttachmentUri = null
                                                 currentAttachmentType = null
+                                                currentAttachmentName = null
                                             }
                                         },
                                         enabled = (inputText.isNotBlank() || currentAttachmentUri != null) && !isLocalBusy,
@@ -842,29 +866,120 @@ fun AttachmentMenu(onSelect: (String) -> Unit) {
         tonalElevation = 4.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(AppSpacing.lg),
-            horizontalArrangement = Arrangement.SpaceAround
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AppSpacing.md, vertical = AppSpacing.lg),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            AttachmentItem(Icons.Default.Image, stringResource(R.string.chat_attachment_image)) { onSelect("image") }
-            AttachmentItem(Icons.Default.AudioFile, stringResource(R.string.chat_attachment_audio)) { onSelect("audio") }
-            AttachmentItem(Icons.Default.VideoFile, stringResource(R.string.chat_attachment_video)) { onSelect("video") }
-            AttachmentItem(Icons.Default.Description, stringResource(R.string.chat_attachment_file)) { onSelect("file") }
+            AttachmentItem(
+                icon = Icons.Default.Image,
+                label = stringResource(R.string.chat_attachment_image),
+                sublabel = stringResource(R.string.chat_attachment_image_desc)
+            ) { onSelect("image") }
+
+            AttachmentItem(
+                icon = Icons.Default.AudioFile,
+                label = stringResource(R.string.chat_attachment_sound),
+                sublabel = stringResource(R.string.chat_attachment_sound_desc)
+            ) { onSelect("audio") }
+
+            AttachmentItem(
+                icon = Icons.Default.Description,
+                label = stringResource(R.string.chat_attachment_document),
+                sublabel = stringResource(R.string.chat_attachment_doc_desc)
+            ) { onSelect("document") }
         }
     }
 }
 
 @Composable
-fun AttachmentItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+fun AttachmentItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    sublabel: String? = null,
+    onClick: () -> Unit
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clickable { onClick() }
-            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm)
+            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
             .minimumInteractiveComponentSize()
     ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (sublabel != null) {
+            Text(
+                text = sublabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                fontSize = 10.sp
+            )
+        }
     }
+}
+
+internal data class DetectedAttachment(
+    val type: String,
+    val fileName: String,
+    val isSupported: Boolean
+)
+
+internal fun detectAttachmentType(context: android.content.Context, uri: android.net.Uri, requestedType: String?): DetectedAttachment {
+    var fileName = "attachment"
+    runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && nameIndex >= 0) {
+                fileName = cursor.getString(nameIndex)
+            }
+        }
+    }
+    val mimeType = runCatching { context.contentResolver.getType(uri) }.getOrNull()?.lowercase().orEmpty()
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+
+    val isImage = mimeType.startsWith("image/") || ext in setOf("jpg", "jpeg", "png", "webp", "heic", "bmp", "gif")
+    val isAudio = mimeType.startsWith("audio/") || ext in setOf("wav", "mp3", "m4a", "aac", "ogg", "flac", "wma")
+    val isDoc = mimeType in setOf(
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+        "text/plain",
+        "text/html",
+        "text/csv",
+        "text/markdown",
+        "application/json"
+    ) || mimeType.startsWith("text/") || ext in setOf("pdf", "docx", "doc", "txt", "md", "csv", "html", "htm", "json")
+
+    val type = when {
+        isImage -> "image"
+        isAudio -> "audio"
+        isDoc -> "document"
+        requestedType == "image" -> "image"
+        requestedType == "audio" -> "audio"
+        else -> "document"
+    }
+
+    val isSupported = isImage || isAudio || isDoc
+    return DetectedAttachment(type = type, fileName = fileName, isSupported = isSupported)
 }
 
 @Composable
@@ -1873,7 +1988,7 @@ fun ChatBubble(
                         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(AppSpacing.sm))
                         Text(
-                            text = message.attachmentUri.substringAfterLast("/"),
+                            text = message.attachmentName ?: message.attachmentUri.substringAfterLast("/"),
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

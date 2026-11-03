@@ -17,6 +17,8 @@ data class ChatMessage(
     val groundedResponse: GroundedChatResponse? = null,  // Phase 5: Structured grounded response
     val groundedAnswerId: String? = null,  // Phase 6: Answer ID for citation footer hydration
     val groundedDisposition: String? = null,  // Phase 6: Grounding disposition ("FULLY_VALIDATED", "UNVERIFIED", etc.)
+    val attachmentText: String? = null,  // Extracted text/transcript from attachment (OCR, Whisper, Doc extract)
+    val attachmentName: String? = null  // Display file name for the attachment
 ) {
     // Computed properties (not constructor params) — Gson bypasses constructor,
     // so precomputed fields would deserialize as 0 for persisted messages.
