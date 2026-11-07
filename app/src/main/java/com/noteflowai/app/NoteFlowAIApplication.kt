@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.noteflowai.app.data.capture.CaptureJobScheduler
 import com.noteflowai.app.data.memory.repository.ProcessingStatusRepository
+import com.noteflowai.app.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,6 +19,10 @@ import java.util.Locale
 class NoteFlowAIApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        // Initialize standard notification channels early in the app lifecycle
+        NotificationHelper.createAllNotificationChannels(this)
+
         // Wire the global Local-Only network firewall before any background work or UI starts.
         com.noteflowai.app.data.NetworkModule.setLocalOnlyChecker {
             com.noteflowai.app.data.settings.SettingsManager.getInstance(applicationContext).isLocalOnlyModeBlocking

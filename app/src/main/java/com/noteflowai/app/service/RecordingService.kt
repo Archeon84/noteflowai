@@ -6,50 +6,93 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.noteflowai.app.MainActivity
 import com.noteflowai.app.R
-
-import android.content.pm.ServiceInfo
-import android.os.Build
-import kotlinx.coroutines.launch
+import com.noteflowai.app.util.NotificationHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class RecordingService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "recording_channel"
-        const val NOTIFICATION_ID = 1
+        const val CHANNEL_ID = NotificationHelper.CHANNEL_RECORDING
+        const val NOTIFICATION_ID = NotificationHelper.NOTIFICATION_ID_RECORDING
         const val ACTION_STOP = "com.noteflowai.app.STOP_RECORDING"
-        private const val AUTO_STOP_WHAT = 1001
-        val stopRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        const val ACTION_PAUSE = "com.noteflowai.app.PAUSE_RECORDING"
+        const val ACTION_RESUME = "com.noteflowai.app.RESUME_RECORDING"
+
+        val stopRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val pauseRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        val resumeRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
     private val autoStopHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var autoStopRunnable: Runnable? = null
-    private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var scheduledRecorder: com.noteflowai.app.data.AudioRecorderHelper? = null
-    private var scheduledJob: kotlinx.coroutines.Job? = null
-    private var scheduledTempFile: java.io.File? = null
+    private var scheduledJob: Job? = null
+    private var scheduledTempFile: File? = null
     private var scheduledFileName: String? = null
+
+    private var recordingStartTime = System.currentTimeMillis()
+    private var isPaused = false
+    private var isScheduled = false
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        NotificationHelper.createAllNotificationChannels(this)
+        recordingStartTime = System.currentTimeMillis()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopRequests.tryEmit(Unit)
-            stopScheduledCaptureAndFinish()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopRequests.tryEmit(Unit)
+                stopScheduledCaptureAndFinish()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> {
+                isPaused = true
+                pauseRequests.tryEmit(Unit)
+                scheduledRecorder?.pauseRecording()
+                val notification = buildNotification(isScheduled = isScheduled, isPaused = true)
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, notification)
+                return START_NOT_STICKY
+            }
+            ACTION_RESUME -> {
+                isPaused = false
+                resumeRequests.tryEmit(Unit)
+                scheduledRecorder?.resumeRecording()
+                val notification = buildNotification(isScheduled = isScheduled, isPaused = false)
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, notification)
+                return START_NOT_STICKY
+            }
         }
 
-        val isScheduled = intent?.getBooleanExtra("scheduled", false) == true
-        val notification = buildNotification(isScheduled)
+        isScheduled = intent?.getBooleanExtra("scheduled", false) == true
+        if (recordingStartTime == 0L) {
+            recordingStartTime = System.currentTimeMillis()
+        }
+
+        val notification = buildNotification(isScheduled = isScheduled, isPaused = isPaused)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -74,9 +117,9 @@ class RecordingService : Service() {
     }
 
     private fun startScheduledCapture() {
-        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val dateStr = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
         val fileName = "scheduled_$dateStr.wav"
-        val tempFile = java.io.File(cacheDir, "temp_$fileName")
+        val tempFile = File(cacheDir, "temp_$fileName")
         val recorder = com.noteflowai.app.data.AudioRecorderHelper().apply { setQuality(1) }
         scheduledFileName = fileName
         scheduledTempFile = tempFile
@@ -111,7 +154,7 @@ class RecordingService : Service() {
                     }
                 }
                 runCatching { tempFile.delete() }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     releaseWakeLock()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -124,11 +167,6 @@ class RecordingService : Service() {
         }
     }
 
-    /**
-     * Scheduled recordings carry duration_minutes; auto-stop after that window
-     * so a background recording cannot run forever. Manual recordings pass 0
-     * (no limit) and keep the existing stop-action behavior.
-     */
     private fun scheduleAutoStop(durationMinutes: Int) {
         autoStopRunnable?.let { autoStopHandler.removeCallbacks(it) }
         if (durationMinutes <= 0) return
@@ -149,7 +187,6 @@ class RecordingService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "NoteFlowAI::RecordingWakeLock"
             ).apply {
-                // Bounded 4-hour safety timeout so battery cannot drain forever on crash
                 acquire(4 * 60 * 60 * 1000L)
             }
         }
@@ -162,50 +199,75 @@ class RecordingService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Recording",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Shows when audio is being recorded"
-        }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(isScheduled: Boolean = false, statusText: String? = null): Notification {
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
+    private fun buildNotification(
+        isScheduled: Boolean = false,
+        statusText: String? = null,
+        isPaused: Boolean = false
+    ): Notification {
+        // Tapping the notification brings the user straight to the live Recording screen
+        val pendingIntent = NotificationHelper.createScreenPendingIntent(this, "RECORD", 100)
 
         val stopIntent = PendingIntent.getService(
             this, 1,
             Intent(this, RecordingService::class.java).apply { action = ACTION_STOP },
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = statusText ?: if (isScheduled) {
-            "Scheduled recording active — tap to open"
+        val pauseResumeIntent = PendingIntent.getService(
+            this, 2,
+            Intent(this, RecordingService::class.java).apply {
+                action = if (isPaused) ACTION_RESUME else ACTION_PAUSE
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val title = if (isPaused) {
+            "NoteFlow AI — Recording Paused"
+        } else if (isScheduled) {
+            "NoteFlow AI — Scheduled Recording"
         } else {
-            "Recording in progress — tap to open"
+            "NoteFlow AI — Recording Audio"
         }
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("NoteFlow AI — Recording")
+        val contentText = statusText ?: if (isPaused) {
+            getString(R.string.notification_recording_paused)
+        } else if (isScheduled) {
+            "Scheduled capture active — tap to view transcript"
+        } else {
+            "Recording in progress — tap to view transcript"
+        }
+
+        val pauseResumeActionTitle = if (isPaused) {
+            getString(R.string.notification_action_resume)
+        } else {
+            getString(R.string.notification_action_pause)
+        }
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_notification_mic)
+            .setColor(0xFF8B5CF6.toInt())
             .setContentIntent(pendingIntent)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(R.drawable.ic_notification_mic, "Stop", stopIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
-            .build()
+            .addAction(R.drawable.ic_notification_mic, pauseResumeActionTitle, pauseResumeIntent)
+            .addAction(R.drawable.ic_notification_mic, getString(R.string.notification_action_stop), stopIntent)
+
+        if (!isPaused && recordingStartTime > 0L) {
+            builder.setUsesChronometer(true)
+                .setWhen(recordingStartTime)
+                .setShowWhen(true)
+        } else {
+            builder.setUsesChronometer(false)
+        }
+
+        return builder.build()
     }
 
     fun updateNotification(text: String) {
-        val notification = buildNotification(statusText = text)
+        val notification = buildNotification(isScheduled = isScheduled, statusText = text, isPaused = isPaused)
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, notification)
     }

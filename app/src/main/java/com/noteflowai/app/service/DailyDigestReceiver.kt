@@ -1,14 +1,11 @@
 package com.noteflowai.app.service
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.noteflowai.app.MainActivity
 import com.noteflowai.app.R
 import com.noteflowai.app.data.concept.ConceptExtractor
 import com.noteflowai.app.data.concept.ConceptGraphRepository
@@ -16,6 +13,7 @@ import com.noteflowai.app.data.digest.DailyDigestManager
 import com.noteflowai.app.data.digest.DigestStorage
 import com.noteflowai.app.data.search.NoteSearchIndex
 import com.noteflowai.app.data.temporal.TemporalIndex
+import com.noteflowai.app.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,16 +22,15 @@ class DailyDigestReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "DailyDigestReceiver"
-        private const val CHANNEL_ID = "daily_digest"
-        private const val NOTIFICATION_ID = 3
+        const val CHANNEL_ID = NotificationHelper.CHANNEL_DIGEST
+        const val NOTIFICATION_ID = NotificationHelper.NOTIFICATION_ID_DIGEST
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != DailyDigestScheduler.ACTION_GENERATE_DIGEST) return
 
-        createNotificationChannel(context)
+        NotificationHelper.createAllNotificationChannels(context)
 
-        // Use goAsync() for coroutine work
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -52,23 +49,18 @@ class DailyDigestReceiver : BroadcastReceiver() {
                     // Save to disk
                     DigestStorage.save(context, digest)
 
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                        androidx.core.content.ContextCompat.checkSelfPermission(
-                            context,
-                            android.Manifest.permission.POST_NOTIFICATIONS
-                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
+                    if (!NotificationHelper.hasNotificationPermission(context)) {
                         return@withTimeout
                     }
 
-                    // Build notification
                     val activityCount = digest.recentActivity.size
                     val questionCount = digest.openQuestions.size
                     val staleCount = digest.staleConcepts.size
                     val connectionCount = digest.hiddenConnections.size
+                    val totalInsights = activityCount + questionCount + staleCount + connectionCount
 
-                    val title = "Your Daily Digest"
-                    val detail = buildString {
+                    val title = "Your Daily Knowledge Digest"
+                    val primaryDetail = buildString {
                         if (activityCount > 0) append("$activityCount recent topics")
                         if (questionCount > 0) {
                             if (isNotEmpty()) append(", ")
@@ -82,29 +74,49 @@ class DailyDigestReceiver : BroadcastReceiver() {
                             if (isNotEmpty()) append(", ")
                             append("$connectionCount hidden connections")
                         }
-                        if (isEmpty()) append("All caught up!")
+                        if (isEmpty()) append("All caught up! Check today's synthesis.")
                     }
 
-                    val openIntent = Intent(context, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        putExtra("navigate_to", "DIGEST")
-                    }
-                    val pendingIntent = PendingIntent.getActivity(
-                        context, 0, openIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    // Deep-link intent directly to the DIGEST screen
+                    val contentPendingIntent = NotificationHelper.createScreenPendingIntent(
+                        context,
+                        "DIGEST",
+                        300
                     )
 
+                    val readActionPendingIntent = NotificationHelper.createScreenPendingIntent(
+                        context,
+                        "DIGEST",
+                        301
+                    )
+
+                    val inboxStyle = NotificationCompat.InboxStyle()
+                        .setBigContentTitle(title)
+                        .setSummaryText("$totalInsights items synthesized")
+
+                    if (activityCount > 0) inboxStyle.addLine("• $activityCount recent topics analyzed")
+                    if (questionCount > 0) inboxStyle.addLine("• $questionCount open questions to explore")
+                    if (connectionCount > 0) inboxStyle.addLine("• $connectionCount hidden connections discovered")
+                    if (staleCount > 0) inboxStyle.addLine("• $staleCount concepts ready for recall")
+                    if (totalInsights == 0) inboxStyle.addLine("• All caught up — tap to review knowledge graph")
+
                     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_notification_mic)
+                        .setSmallIcon(R.drawable.ic_notification_digest)
+                        .setColor(0xFF8B5CF6.toInt())
                         .setContentTitle(title)
-                        .setContentText(detail)
-                        .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+                        .setContentText(primaryDetail)
+                        .setStyle(inboxStyle)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .setContentIntent(pendingIntent)
+                        .setContentIntent(contentPendingIntent)
+                        .addAction(
+                            R.drawable.ic_notification_digest,
+                            context.getString(R.string.notification_action_read_digest),
+                            readActionPendingIntent
+                        )
                         .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                         .setPublicVersion(
                             NotificationCompat.Builder(context, CHANNEL_ID)
-                                .setSmallIcon(R.drawable.ic_notification_mic)
+                                .setSmallIcon(R.drawable.ic_notification_digest)
                                 .setContentTitle("Daily Digest")
                                 .setContentText("Your daily brief is ready")
                                 .build()
@@ -115,27 +127,14 @@ class DailyDigestReceiver : BroadcastReceiver() {
                     val managerNotif = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     managerNotif.notify(NOTIFICATION_ID, notification)
 
-                    Log.i(TAG, "Daily digest generated: $detail")
+                    Log.i(TAG, "Daily digest notification published: $primaryDetail")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to generate digest: ${e.message}", e)
             } finally {
-                // Always re-schedule for tomorrow since setExactAndAllowWhileIdle fires once
                 DailyDigestScheduler(context).schedule()
                 pendingResult.finish()
             }
         }
-    }
-
-    private fun createNotificationChannel(context: Context) {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Daily Digest",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Daily summary of your notes, concepts, and open questions"
-        }
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
     }
 }

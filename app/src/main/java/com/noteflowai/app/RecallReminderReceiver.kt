@@ -1,34 +1,31 @@
 package com.noteflowai.app
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-
 import com.noteflowai.app.data.concept.ConceptExtractor
 import com.noteflowai.app.data.concept.ConceptGraphRepository
 import com.noteflowai.app.data.search.NoteSearchIndex
 import com.noteflowai.app.data.search.RecallPredictor
 import com.noteflowai.app.data.temporal.TemporalIndex
+import com.noteflowai.app.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * BroadcastReceiver that fires daily to show a recall reminder notification.
- * Loads indexes from disk, runs RecallPredictor, and surfaces stale concepts.
+ * BroadcastReceiver that fires daily to surface proactive spaced-repetition
+ * and conflict alerts through standard Android notifications.
  */
 class RecallReminderReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_SHOW_REMINDER = "com.noteflowai.app.SHOW_RECALL_REMINDER"
-        private const val CHANNEL_ID = "recall_reminders"
-        private const val NOTIFICATION_ID = 2
+        const val CHANNEL_ID = NotificationHelper.CHANNEL_RECALL
+        const val NOTIFICATION_ID = NotificationHelper.NOTIFICATION_ID_RECALL
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -37,19 +34,14 @@ class RecallReminderReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        context,
-                        android.Manifest.permission.POST_NOTIFICATIONS
-                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) {
+                if (!NotificationHelper.hasNotificationPermission(context)) {
                     return@launch
                 }
 
                 kotlinx.coroutines.withTimeout(8_000L) {
-                    createNotificationChannel(context)
+                    NotificationHelper.createAllNotificationChannels(context)
 
-                    // Load indexes from disk (same pattern as MainViewModel init)
+                    // Load indexes from disk
                     val searchIndex = NoteSearchIndex()
                     val extractor = ConceptExtractor(searchIndex)
                     val temporalIndex = TemporalIndex(extractor)
@@ -58,46 +50,76 @@ class RecallReminderReceiver : BroadcastReceiver() {
                     temporalIndex.loadFromDisk(context)
                     conceptGraph.loadFromDisk(context)
 
-                    // Find stale concepts
+                    // Find stale concepts / contradictions
                     val predictor = RecallPredictor(temporalIndex, conceptGraph)
                     val suggestions = predictor.findRecallSuggestions()
 
-                    if (suggestions.isEmpty()) return@withTimeout  // nothing to remind about
+                    if (suggestions.isEmpty()) return@withTimeout // nothing to remind about
 
-                    // Build notification with top suggestions
-                    val topSuggestions = suggestions.take(3)
-                    val title = if (topSuggestions.any { it.type == RecallPredictor.RecallType.CONFLICT_DETECTED }) {
-                        "Conflicting notes found"
+                    val topSuggestions = suggestions.take(4)
+                    val hasConflict = topSuggestions.any { it.type == RecallPredictor.RecallType.CONFLICT_DETECTED }
+                    val targetScreen = if (hasConflict) "CONFLICT_DETECTION" else "MEMORY"
+
+                    val title = if (hasConflict) {
+                        "Conflicting Notes Detected"
                     } else {
                         "Revisit: ${topSuggestions.first().concept}"
                     }
-                    val detail = if (topSuggestions.size == 1) {
-                        topSuggestions.first().detail
-                    } else {
-                        "${topSuggestions.first().detail} +${topSuggestions.size - 1} more"
-                    }
 
-                    val openIntent = Intent(context, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    val pendingIntent = PendingIntent.getActivity(
-                        context, 0, openIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    val primaryDetail = topSuggestions.first().detail
+
+                    // Build deep-link pending intent straight to the target Screen
+                    val contentPendingIntent = NotificationHelper.createScreenPendingIntent(
+                        context,
+                        targetScreen,
+                        200
                     )
 
+                    // Action buttons
+                    val reviewActionPendingIntent = NotificationHelper.createScreenPendingIntent(
+                        context,
+                        targetScreen,
+                        201
+                    )
+                    val notesActionPendingIntent = NotificationHelper.createScreenPendingIntent(
+                        context,
+                        "NOTES",
+                        202
+                    )
+
+                    val inboxStyle = NotificationCompat.InboxStyle()
+                        .setBigContentTitle(title)
+                        .setSummaryText("${suggestions.size} ideas to review")
+
+                    topSuggestions.forEach { suggestion ->
+                        val prefix = if (suggestion.type == RecallPredictor.RecallType.CONFLICT_DETECTED) "⚡ " else "• "
+                        inboxStyle.addLine("$prefix${suggestion.concept}: ${suggestion.detail}")
+                    }
+
                     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_notification_mic)
+                        .setSmallIcon(R.drawable.ic_notification_recall)
+                        .setColor(0xFF8B5CF6.toInt())
                         .setContentTitle(title)
-                        .setContentText(detail)
-                        .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+                        .setContentText(primaryDetail)
+                        .setStyle(inboxStyle)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                        .setContentIntent(pendingIntent)
+                        .setContentIntent(contentPendingIntent)
+                        .addAction(
+                            R.drawable.ic_notification_recall,
+                            context.getString(R.string.notification_action_review),
+                            reviewActionPendingIntent
+                        )
+                        .addAction(
+                            R.drawable.ic_widget_note,
+                            "View Notes",
+                            notesActionPendingIntent
+                        )
                         .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                         .setPublicVersion(
                             NotificationCompat.Builder(context, CHANNEL_ID)
-                                .setSmallIcon(R.drawable.ic_notification_mic)
-                                .setContentTitle("Recall reminder")
-                                .setContentText("You have ideas to revisit")
+                                .setSmallIcon(R.drawable.ic_notification_recall)
+                                .setContentTitle("Recall Reminder")
+                                .setContentText("You have knowledge items to review")
                                 .build()
                         )
                         .setAutoCancel(true)
@@ -107,7 +129,7 @@ class RecallReminderReceiver : BroadcastReceiver() {
                     manager.notify(NOTIFICATION_ID, notification)
                 }
             } catch (e: Exception) {
-                Log.w("RecallReminderReceiver", "Failed: ${e.message}")
+                Log.w("RecallReminderReceiver", "Failed to present recall reminder: ${e.message}")
             } finally {
                 runCatching {
                     val settings = com.noteflowai.app.data.settings.SettingsManager.getInstance(context.applicationContext)
@@ -120,17 +142,5 @@ class RecallReminderReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
-    }
-
-    private fun createNotificationChannel(context: Context) {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Recall Reminders",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Daily reminders to revisit stale concepts and notes"
-        }
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
     }
 }

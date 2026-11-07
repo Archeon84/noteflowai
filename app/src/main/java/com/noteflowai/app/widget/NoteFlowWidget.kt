@@ -1,11 +1,11 @@
 package com.noteflowai.app.widget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.net.Uri
 import android.widget.RemoteViews
 import com.noteflowai.app.MainActivity
@@ -32,15 +32,10 @@ class NoteFlowWidget : AppWidgetProvider() {
     }
 
     private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-        val isNight = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-
         val views = RemoteViews(context.packageName, R.layout.widget_layout)
 
-        // Set title text color
+        // Set static header title
         views.setTextViewText(R.id.widgetTitleText, context.getString(R.string.app_name))
-        views.setTextColor(R.id.widgetTitleText, 0xFFFFFFFF.toInt())
-        views.setTextColor(R.id.widgetRecordLabel, 0xC8FFFFFF.toInt())
-        views.setTextColor(R.id.widgetNoteLabel, 0xC8FFFFFF.toInt())
 
         // Wire the ListView to the RemoteViewsService
         val serviceIntent = Intent(context, NoteWidgetService::class.java).apply {
@@ -48,51 +43,84 @@ class NoteFlowWidget : AppWidgetProvider() {
             data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
         }
         views.setRemoteAdapter(R.id.widgetNotesList, serviceIntent)
-        views.setEmptyView(R.id.widgetNotesList, R.id.widgetEmptyText)
+        views.setEmptyView(R.id.widgetNotesList, R.id.widgetEmptyState)
 
-        // Pending intent template for note clicks
+        // Pending intent template for note list item clicks
         val noteClickIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_WIDGET_OPEN_NOTE
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val noteClickPending = android.app.PendingIntent.getActivity(
+        val noteClickPending = PendingIntent.getActivity(
             context, 10, noteClickIntent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
         views.setPendingIntentTemplate(R.id.widgetNotesList, noteClickPending)
 
-        // Tap the title opens the app at Home
-        val openIntent = Intent(context, MainActivity::class.java)
-        val openPending = android.app.PendingIntent.getActivity(
-            context, 0, openIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        // Tap header title -> Open app at Home
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openPending = PendingIntent.getActivity(
+            context, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widgetTitle, openPending)
 
-        // Search button opens app
-        val searchIntent = Intent(context, MainActivity::class.java)
-        val searchPending = android.app.PendingIntent.getActivity(
-            context, 11, searchIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        // Search icon action
+        val searchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_WIDGET_ACTION, MainActivity.ACTION_WIDGET_SEARCH)
+        }
+        val searchPending = PendingIntent.getActivity(
+            context, 11, searchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widgetSearchBtn, searchPending)
 
-        // Record action
+        // Quick add (+) note icon action
+        val quickAddIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_WIDGET_ACTION, MainActivity.ACTION_WIDGET_NOTE)
+        }
+        val quickAddPending = PendingIntent.getActivity(
+            context, 12, quickAddIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widgetQuickAddBtn, quickAddPending)
+        views.setOnClickPendingIntent(R.id.widgetEmptyState, quickAddPending)
+
+        // Bottom Action 1: Record (Instant Voice Capture)
         val recordIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(MainActivity.EXTRA_WIDGET_ACTION, MainActivity.ACTION_WIDGET_RECORD)
         }
-        val recordPending = android.app.PendingIntent.getActivity(
-            context, 1, recordIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val recordPending = PendingIntent.getActivity(
+            context, 1, recordIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widgetRecordBtn, recordPending)
 
-        // New Note action
+        // Bottom Action 2: New Note
         val noteIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(MainActivity.EXTRA_WIDGET_ACTION, MainActivity.ACTION_WIDGET_NOTE)
         }
-        val notePending = android.app.PendingIntent.getActivity(
-            context, 2, noteIntent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        val notePending = PendingIntent.getActivity(
+            context, 2, noteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widgetNoteBtn, notePending)
+
+        // Bottom Action 3: Ask AI (On-Device RAG Chat)
+        val chatIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_WIDGET_ACTION, MainActivity.ACTION_WIDGET_CHAT)
+        }
+        val chatPending = PendingIntent.getActivity(
+            context, 3, chatIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widgetChatBtn, chatPending)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }

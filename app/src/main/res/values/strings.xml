@@ -2,6 +2,16 @@
     <string name="app_name">NoteFlow AI</string>
     <string name="widget_record">Record</string>
     <string name="widget_new_note">New Note</string>
+    <string name="widget_ask_ai">Ask AI</string>
+    <string name="widget_search">Search notes</string>
+    <string name="widget_empty_title">Your second brain is empty</string>
+    <string name="widget_empty_subtitle">Tap + to capture your first idea</string>
+    <string name="notification_recording_paused">Recording paused — tap to resume</string>
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_review">Review</string>
+    <string name="notification_action_read_digest">Read Digest</string>
 
     <!-- Common -->
     <string name="error_title">Something went wrong</string>

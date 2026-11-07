@@ -1466,6 +1466,18 @@ Rules:
         }
 
         viewModelScope.launch {
+            RecordingService.pauseRequests.collect {
+                pauseRecording(notifyService = false)
+            }
+        }
+
+        viewModelScope.launch {
+            RecordingService.resumeRequests.collect {
+                resumeRecording(notifyService = false)
+            }
+        }
+
+        viewModelScope.launch {
             var lastTranscriptUiUpdate = 0L
             deepgramRepository.transcriptFlow.collect { result ->
                 if (_isRecording.value && !isPaused.value) {
@@ -1918,17 +1930,29 @@ Rules:
         }
     }
 
-    fun pauseRecording() {
+    fun pauseRecording(notifyService: Boolean = true) {
         if (_isRecording.value && !_isPaused.value) {
             _isPaused.value = true
             audioRecorder.pauseRecording()
+            if (notifyService) {
+                val pauseIntent = Intent(getApplication(), RecordingService::class.java).apply {
+                    action = RecordingService.ACTION_PAUSE
+                }
+                runCatching { getApplication<Application>().startService(pauseIntent) }
+            }
         }
     }
 
-    fun resumeRecording() {
+    fun resumeRecording(notifyService: Boolean = true) {
         if (_isRecording.value && _isPaused.value) {
             _isPaused.value = false
             audioRecorder.resumeRecording()
+            if (notifyService) {
+                val resumeIntent = Intent(getApplication(), RecordingService::class.java).apply {
+                    action = RecordingService.ACTION_RESUME
+                }
+                runCatching { getApplication<Application>().startService(resumeIntent) }
+            }
         }
     }
 

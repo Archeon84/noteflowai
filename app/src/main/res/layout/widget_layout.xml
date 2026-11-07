@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="14dp">
+    android:padding="12dp">
 
-    <!-- Header (tap to open app) -->
+    <!-- Header bar -->
     <LinearLayout
         android:id="@+id/widgetTitle"
         android:layout_width="match_parent"
@@ -17,9 +18,9 @@
         android:paddingBottom="8dp">
 
         <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:src="@drawable/ic_notification_mic"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_widget_note"
             android:layout_marginEnd="8dp" />
 
         <TextView
@@ -28,41 +29,84 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/app_name"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
 
+        <!-- Search Icon Action -->
         <ImageView
             android:id="@+id/widgetSearchBtn"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@android:drawable/ic_menu_search"
-            android:alpha="0.8" />
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_widget_search"
+            android:contentDescription="@string/widget_search"
+            android:alpha="0.85" />
+
+        <!-- Quick Add Note Icon Action -->
+        <ImageView
+            android:id="@+id/widgetQuickAddBtn"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:padding="4dp"
+            android:layout_marginStart="6dp"
+            android:src="@drawable/ic_widget_add"
+            android:contentDescription="@string/widget_new_note"
+            android:alpha="0.85" />
     </LinearLayout>
 
-    <!-- Recent notes list -->
-    <ListView
-        android:id="@+id/widgetNotesList"
+    <!-- Content container: List + Empty View -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:divider="@android:color/transparent"
-        android:dividerHeight="0dp"
-        android:scrollbars="none" />
+        android:layout_weight="1">
 
-    <!-- Empty state -->
-    <TextView
-        android:id="@+id/widgetEmptyText"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:text="No notes yet"
-        android:textColor="#80FFFFFF"
-        android:textSize="12sp"
-        android:visibility="gone" />
+        <ListView
+            android:id="@+id/widgetNotesList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="0dp"
+            android:scrollbars="none" />
 
-    <!-- Bottom quick actions -->
+        <!-- Empty state card -->
+        <LinearLayout
+            android:id="@+id/widgetEmptyState"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_widget_note"
+                android:alpha="0.5" />
+
+            <TextView
+                android:id="@+id/widgetEmptyTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_empty_title"
+                android:textColor="#E0E7FF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/widgetEmptySubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_empty_subtitle"
+                android:textColor="#99A5B4FC"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Bottom Superpower Quick Actions Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -70,6 +114,7 @@
         android:gravity="center"
         android:paddingTop="8dp">
 
+        <!-- 1. Voice Record -->
         <LinearLayout
             android:id="@+id/widgetRecordBtn"
             android:layout_width="0dp"
@@ -78,12 +123,11 @@
             android:orientation="vertical"
             android:gravity="center"
             android:background="@drawable/widget_button_bg"
-            android:paddingTop="12dp"
-            android:paddingBottom="10dp">
+            android:paddingVertical="9dp">
 
             <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:src="@drawable/ic_widget_mic" />
 
             <TextView
@@ -93,24 +137,24 @@
                 android:text="@string/widget_record"
                 android:textSize="10sp"
                 android:textColor="#E6FFFFFF"
-                android:layout_marginTop="4dp" />
+                android:layout_marginTop="3dp" />
         </LinearLayout>
 
+        <!-- 2. New Note -->
         <LinearLayout
             android:id="@+id/widgetNoteBtn"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="8dp"
             android:orientation="vertical"
             android:gravity="center"
             android:background="@drawable/widget_button_bg"
-            android:paddingTop="12dp"
-            android:paddingBottom="10dp">
+            android:paddingVertical="9dp">
 
             <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:src="@drawable/ic_widget_note" />
 
             <TextView
@@ -120,7 +164,34 @@
                 android:text="@string/widget_new_note"
                 android:textSize="10sp"
                 android:textColor="#E6FFFFFF"
-                android:layout_marginTop="4dp" />
+                android:layout_marginTop="3dp" />
+        </LinearLayout>
+
+        <!-- 3. Ask AI (On-Device RAG Chat) -->
+        <LinearLayout
+            android:id="@+id/widgetChatBtn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/widget_button_bg"
+            android:paddingVertical="9dp">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_widget_chat" />
+
+            <TextView
+                android:id="@+id/widgetChatLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_ask_ai"
+                android:textSize="10sp"
+                android:textColor="#E6FFFFFF"
+                android:layout_marginTop="3dp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

@@ -140,6 +140,12 @@ fun NoteFlowApp(
                     currentScreen = Screen.NOTES
                     viewModel.showNewNoteDialog()
                 }
+                MainActivity.ACTION_WIDGET_CHAT -> {
+                    currentScreen = Screen.CHAT
+                }
+                MainActivity.ACTION_WIDGET_SEARCH -> {
+                    currentScreen = Screen.NOTES
+                }
             }
             widgetAction.value = null
         }
